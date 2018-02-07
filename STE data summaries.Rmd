@@ -1,0 +1,197 @@
+---
+title: "extracted data summaries"
+author: "David Gill"
+date: "January 31, 2018"
+output: html_document
+---
+## Descriptive data
+```{r eval=F}
+# Clear workspace
+rm(list = ls())
+
+# Turn off scientific notation
+options(scipen=999,stringsAsFactors = FALSE)
+
+# Packages
+library(foreign)
+library(readxl)
+library(raster)
+library(tools)
+library(rgeos)
+library(rgdal) # readOGR()
+library(sp)
+library(maptools)
+library(prettymapr)
+library(RColorBrewer)
+library(countrycode) # for assigning ISO codes
+library(cowplot)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+
+# Directories
+dropbox <- "C:/Users/LocalAdmin/Dropbox/SynergiesTradeoffs.Review/"
+datadir <- "C:/Users/dgill6/Documents/Data analysis/STEreview/"
+
+# Projections
+wgs84 <- CRS("+proj=longlat +ellps=WGS84")
+```
+### Read in and clean up dataframe
+```{r eval=F}
+ext.data <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
+
+# clean up variable names
+names(ext.data) <- gsub(" ","_",names(ext.data))
+#names(ext.data) <- gsub('\\d+_',"",names(ext.data))
+ext.data <- ext.data %>% 
+    rename(articleID=Data_extraction_questionnaire.01_Article_ID, intervention=`22_Type_of_intervention`,
+           exclude=`05_Exclude`,pub_yr=`13_Year_of_publication`,study_typ=`32_Study_type`,
+           ctrl_gp=`33_Study_includes_a_comparison/control_group`,ctrl_gp_typ=`34_Type_of_comparison_(control_group)`,
+           country=`37_Country_of_study`,biome=`39_Biome`, outcomeID=`OutcomeID`,
+           outcome_domain=`42_Outcome_domain`,outcome_attr=`43_Outcome_attribute`,
+           outcome_obs=`45_Perceptions_vs_observed_outcome`,outcome_data_typ=`46_Outcome_data-type`,
+           resource_typ=`47_Resource_use_type`,outcome_direct=`48_Overall_outcome_direction`,
+           outcome_plrl=`49_Pluralism_(who_defines_STEs?)`,
+           STE_domain=`411_STE:_social_domain/HWB_outcomes`,STE_econgp=`412_STE:_(economic_status)`,
+           STE_socialgp=`413_STE:__(social_status)`,STE_sex=`414_STE:__(sex)`,
+           STE_ethnicgp=`415_STE:__(ethnic_group/race)`,STE_age=`416_STE:__(age)`,           
+           STE_occupation=`417_STE:__(occupation)`,STE_organization=`418_STE:_level_of_social_organization`,
+           STE_spatial_units=`419_STE:_spatial_units`,STE_temporal_units=`420_STE:_temporal_units`,
+           STE_temporal_scale=`421_STE:_temporal_scales`)
+
+# remove unwanted variables and those entries that are not completed as yet
+unwanted.var <- grep('(\\d)',names(ext.data),value = T)
+ext.data <- ext.data %>% 
+  filter(!is.na(intervention)) %>% 
+  select(-one_of(unwanted.var))
+```
+
+### Basic plots 
+```{r eval=F}
+#Percent excluded
+sum(ext.data$exclude)/length(unique(ext.data$articleID))
+
+# Interventions
+table(ext.data$intervention)
+pIntervention <- ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by(articleID,intervention) %>% 
+    summarise(num=n()) %>% 
+  ggplot(aes(intervention)) +
+    geom_histogram(stat='count') +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Type of study
+table(ext.data$study_typ)
+pStudyType<- ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by(articleID,study_typ) %>% 
+    summarise(num=n()) %>% 
+  ggplot(aes(study_typ)) +
+    geom_histogram(stat='count') +
+    xlab("Study type") +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Outcome domain
+pOutcome_domain<- ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+  ggplot(aes(outcome_domain)) +
+    geom_histogram(stat='count') +
+    xlab("Outcome Domain") +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Dimensions
+ste.data <- ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  select(STE_domain:STE_temporal_scale)
+ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
+names(ste.data1)[1] <- "total"
+ste.data1$var <- row.names(ste.data1)
+
+pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
+    geom_histogram(stat='identity') +
+    coord_flip() +
+    theme_bw() +
+    xlab("STE dimension") +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Data type
+pDatatype <-  ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+  ggplot(aes(outcome_data_typ)) +
+    geom_histogram(stat='count') +
+    xlab("Data type") +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ 
+# Perceived vs observed
+pDataobs <-  ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+  ggplot(aes(outcome_obs)) +
+    geom_histogram(stat='count') +
+    xlab("Data 'observer'") +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Perceived vs observed
+ ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by(outcome_obs,outcome_domain) %>% 
+    summarise(total=n()) %>% 
+  ggplot(aes(x=reorder(outcome_domain,total),y=total, fill=outcome_obs)) +
+    geom_histogram(stat='identity',position=position_dodge()) +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+plot_grid(pIntervention, pOutcome_domain,pStudyType,pSTE,pDatatype,pDataobs,  labels=letters[1:6], ncol = 3, nrow = 2, hjust=-1)
+
+
+ggsave(paste0(datadir,'STE data summaries.jpg'),width = 10.5,height = 6)
+  
+```
+
+### Global map
+```{r eval=F}
+# Add iso3 column to world map for matching to data
+world <-  map_data("world") %>% 
+  fortify(world,region="group") %>% 
+  mutate(iso3=countrycode(region, "country.name", "iso3c"),
+       iso3=ifelse(region=='Ascension Island','SHN',iso3),iso3=ifelse(region=='Barbuda','ATG',iso3),
+       iso3=ifelse(region=='Bonaire','ANT',iso3),
+       iso3=ifelse(region=='Canary Islands','ESP',iso3),iso3=ifelse(region=='Chagos Archipelago','IOT',iso3),
+       iso3=ifelse(region=='Grenadines','VCT',iso3),
+       iso3=ifelse(region=='Saba','ANT',iso3),
+       iso3=ifelse(region=='Saint Martin','MAF',iso3),iso3=ifelse(region=='Sint Eustatius','ANT',iso3),
+      iso3=ifelse(region=='Virgin Islands','VGB',iso3))
+
+# Summarise data by country
+ctry <- ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(articleID,country) %>% 
+  summarise(num=n()) %>% 
+  separate(country,c('ctry1','ctry2'),sep=",",remove = F) %>% 
+  gather(key=ctry.col,value=ctry,ctry1:ctry2) %>% 
+  filter(!is.na(ctry) & !ctry%in%(" United Republic Of")) %>% 
+  group_by(ctry) %>% 
+  summarise(total=n()) %>% 
+  mutate(iso3=countrycode(ctry, "country.name", "iso3c"))
+
+#plot
+ste.map <-   world %>% 
+  filter(iso3%in%ctry$iso3)
+world %>% 
+  ggplot(aes(x = long, y = lat, group = group)) +
+    geom_polygon(fill='white',col='black') +
+    geom_polygon(data=ste.map,fill='blue',col='black')
+    
+ggsave(paste0(datadir,'STE data map.jpg'),width = 13,height = 7)
+```
