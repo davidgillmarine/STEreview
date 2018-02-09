@@ -30,9 +30,8 @@ library(tidyverse)
 library(dplyr)
 
 # Directories
-dropbox <- "C:/Users/LocalAdmin/Dropbox/SynergiesTradeoffs.Review/"
+dropbox <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
 datadir <- "C:/Users/dgill6/Documents/Data analysis/STEreview/"
-
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 ```
@@ -42,69 +41,216 @@ ext.data <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), she
 
 # clean up variable names
 names(ext.data) <- gsub(" ","_",names(ext.data))
-#names(ext.data) <- gsub('\\d+_',"",names(ext.data))
 ext.data <- ext.data %>% 
-    rename(articleID=Data_extraction_questionnaire.01_Article_ID, intervention=`22_Type_of_intervention`,
-           exclude=`05_Exclude`,pub_yr=`13_Year_of_publication`,study_typ=`32_Study_type`,
-           ctrl_gp=`33_Study_includes_a_comparison/control_group`,ctrl_gp_typ=`34_Type_of_comparison_(control_group)`,
-           country=`37_Country_of_study`,biome=`39_Biome`, outcomeID=`OutcomeID`,
-           outcome_domain=`42_Outcome_domain`,outcome_attr=`43_Outcome_attribute`,
-           outcome_obs=`45_Perceptions_vs_observed_outcome`,outcome_data_typ=`46_Outcome_data-type`,
-           resource_typ=`47_Resource_use_type`,outcome_direct=`48_Overall_outcome_direction`,
-           outcome_plrl=`49_Pluralism_(who_defines_STEs?)`,
-           STE_domain=`411_STE:_social_domain/HWB_outcomes`,STE_econgp=`412_STE:_(economic_status)`,
-           STE_socialgp=`413_STE:__(social_status)`,STE_sex=`414_STE:__(sex)`,
-           STE_ethnicgp=`415_STE:__(ethnic_group/race)`,STE_age=`416_STE:__(age)`,           
-           STE_occupation=`417_STE:__(occupation)`,STE_organization=`418_STE:_level_of_social_organization`,
-           STE_spatial_units=`419_STE:_spatial_units`,STE_temporal_units=`420_STE:_temporal_units`,
-           STE_temporal_scale=`421_STE:_temporal_scales`)
+    rename(articleID='Data_extraction_questionnaire.01_Article_ID',
+           exclude='05_Exclude',
+           pub_typ='11_Publication_type',
+           pub_yr='13_Year_of_publication',
+           journal='15_Journal', 
+           source='110_Source', 
+           auth_aff='17_Affiliation_type_of_first_author',           
+           int_typ='22_Type_of_intervention',
+           int_scale='24_Geographic_scale_of_intervention',           
+           int_time='25_Timeframe_of_intervention',           
+           int_auth='27_Managing_authority',           
+           int_loc='28_Intervention_location',           
+           int_area='29_Intevention_area',           
+           study_typ='32_Study_type',
+           ctrl_gp='33_Study_includes_a_comparison/control_group',
+           ctrl_typ='34_Type_of_comparison_(control_group)',
+           stdy_source='35_Data_source',           
+           stdy_ctry='37_Country_of_study',
+           stdy_scl='38_Study_scale',           
+           biome='39_Biome', 
+           eval_aff='310_Affliation_of_evaluator',           
+           stdy_unit='311_Social_unit_of_analysis', 
+           stdy_siz='312_Sample_size_(maximum)', 
+           stdy_dur='313_Duration_of_study', 
+           eqty_dist='51_Distributive_equity', 
+           eqty_rcgn='52_Recognitional_equity', 
+           eqty_ctxt='53_Contextual_equity', 
+           eqty_proc='54_Procedural_equity', 
+           cp_toc='61_Causal_pathway/theory_of_change', 
+           exp_mech='62_Explicit_mechanism', 
+           outcomeID='OutcomeID',
+           outcome_stated='41_Stated_outcome_measured',
+           outcome_domain='42_Outcome_domain',
+           outcome_attr='43_Outcome_attribute',
+           outcome_ind='44_Outcome_indicator',
+           outcome_obs='45_Perceptions_vs_observed_outcome',
+           outcome_data_typ='46_Outcome_data-type',
+           resource_typ='47_Resource_use_type',
+           outcome_direct='48_Overall_outcome_direction',
+           outcome_plrl='49_Pluralism_(who_defines_STEs?)',
+           outcome_gp='410_Outcome_sub-group',
+           STE_domain='411_STE:_social_domain/HWB_outcomes',
+           STE_econgp='412_STE:_(economic_status)',
+           STE_socialgp='413_STE:__(social_status)',
+           STE_sex='414_STE:__(sex)',
+           STE_ethnicgp='415_STE:__(ethnic_group/race)',
+           STE_age='416_STE:__(age)',           
+           STE_occupation='417_STE:__(occupation)',
+           STE_organization='418_STE:_level_of_social_organization',
+           STE_spatial_units='419_STE:_spatial_units',
+           STE_temporal_units='420_STE:_temporal_units',
+           STE_temporal_scale='421_STE:_temporal_scales')
 
 # remove unwanted variables and those entries that are not completed as yet
 unwanted.var <- grep('(\\d)',names(ext.data),value = T)
 ext.data <- ext.data %>% 
-  filter(!is.na(intervention)) %>% 
-  select(-one_of(unwanted.var))
+  filter(!is.na(int_typ) & !is.na(outcome_domain)) %>% 
+  select(-one_of(unwanted.var)) %>%
+  mutate(ctrl_typ=gsub("Pre-treatment/post-treatment","Pre/post treatment",ctrl_typ))
 ```
 
-### Basic plots 
+### Basic plot functions
+```{r eval=F}
+ste_gp <- function (x,y) {
+  ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by_(x,y) %>% 
+    summarise(num=n()) %>%
+    arrange(num) %>%
+    ggplot(aes_q(y))+
+    geom_bar(stat='count') +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+}
+
+ste_gp_o <- function (z) {
+ ext.data %>% 
+  filter(exclude=='FALSE' & !is.na(z)) %>%
+  group_by_(z) %>% 
+  summarise(num=n()) %>%
+  arrange(-num) }
+ste_hist <- function () {
+  list(
+    geom_histogram(stat='identity'),
+    coord_flip(),
+    theme_bw(),
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  )
+}
+
+```
+
+### Intervention and study plots
 ```{r eval=F}
 #Percent excluded
 sum(ext.data$exclude)/length(unique(ext.data$articleID))
-
-# Interventions
-table(ext.data$intervention)
-pIntervention <- ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-    group_by(articleID,intervention) %>% 
+pExclude <- ext.data %>% 
+    group_by(articleID,exclude) %>% 
     summarise(num=n()) %>% 
-  ggplot(aes(intervention)) +
+  ggplot(aes(exclude)) +
     geom_histogram(stat='count') +
     coord_flip() +
+    xlab("Excluded articles") +
     theme_bw() +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+   
+
+# Publication year
+table(ext.data$pub_yr)
+minyr <- min(ext.data$pub_yr)-1;maxyr <- max(ext.data$pub_yr)+1
+pPubyr<- ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by(articleID,pub_yr) %>% 
+    summarise(num=n()) %>% 
+    ggplot(aes(pub_yr))+
+    geom_histogram(stat='count') +
+    scale_x_continuous("Publication year", breaks=seq(minyr,maxyr,5)) +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Publication type
+pPubtype<-ste_gp(~articleID,~pub_typ) +
+  xlab("Publication type")
+
+# Author affliation
+table(ext.data$auth_aff)
+pAuth_aff<-ste_gp(~articleID,~auth_aff) +
+  xlab("Author affliation")
+
+# Intervention type
+table(ext.data$int_typ)
+pInt_typ<-ste_gp(~articleID,~int_typ) +
+  xlab("Intervention type")
+
+# Intervention scale
+table(ext.data$int_scale)
+pInt_scale<-ste_gp(~articleID,~int_scale) +
+  xlab("Intervention scale")
 
 # Type of study
 table(ext.data$study_typ)
-pStudyType<- ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-    group_by(articleID,study_typ) %>% 
-    summarise(num=n()) %>% 
-  ggplot(aes(study_typ)) +
-    geom_histogram(stat='count') +
-    xlab("Study type") +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+pStudy_typ<-ste_gp(~articleID,~study_typ) +
+  xlab("Study type")
 
+# Study data source
+table(ext.data$stdy_source)
+pStdy_source<-ste_gp(~articleID,~stdy_source) +
+  xlab("Study data source")
+
+# Study scale
+table(ext.data$stdy_scl)
+pStdy_scl<-ste_gp(~articleID,~stdy_scl) +
+  xlab("Study scale")
+
+# Control group
+table(ext.data$ctrl_gp)
+pCtrl_gp<-ste_gp(~articleID,~ctrl_gp) +
+  xlab("Control group")
+
+# Control group type
+table(ext.data$ctrl_typ)
+pCtrl_typ<-ste_gp(~articleID,~ctrl_typ) +
+  xlab("Control group type")
+
+# Biome
+table(ext.data$biome)
+pBiome<-ste_gp(~articleID,~biome) +
+  xlab("Biome")
+
+# Country
+table(ext.data$stdy_ctry)
+pCountry<-ste_gp(~articleID,~stdy_ctry) +
+  xlab("Study country")
+
+
+plot_grid(pExclude,pPubyr,pPubtype,pAuth_aff,
+          labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'STE pub info.jpg'),width = 10.5,height = 6)
+
+plot_grid(pInt_typ,pInt_scale,pBiome,pCountry
+          ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'STE intervention info.jpg'),width = 14,height = 9)
+
+plot_grid(pStudy_typ,pStdy_source,pStdy_scl,pCtrl_gp,pCtrl_typ,
+          labels=letters[1:5], ncol = 3, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'STE study info.jpg'),width = 10.5,height = 6)
+
+```
+
+### Outcome plots
+```{r eval=F}
 # Outcome domain
-pOutcome_domain<- ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-  ggplot(aes(outcome_domain)) +
-    geom_histogram(stat='count') +
-    xlab("Outcome Domain") +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+pOut_domain <- ste_hist_o('outcome_domain') %>% 
+ggplot(aes(x=reorder(outcome_domain,num),y=num))+
+  ste_hist() +
+  xlab('Outcome domain')
+
+# Data type
+pDatatype <-  ste_hist_o('outcome_data_typ') %>% 
+  ggplot(aes(x=reorder(outcome_data_typ,num),y=num))+
+  ste_hist() +
+  xlab("Outcome data type")
+ 
+# Perceived vs observed
+pDataobs <- ste_hist_o('outcome_obs') %>% 
+  ggplot(aes(x=reorder(outcome_obs,num),y=num))+
+  ste_hist() +
+  xlab("Data 'observer'")
 
 # Dimensions
 ste.data <- ext.data %>% 
@@ -112,51 +258,15 @@ ste.data <- ext.data %>%
   select(STE_domain:STE_temporal_scale)
 ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
 names(ste.data1)[1] <- "total"
-ste.data1$var <- row.names(ste.data1)
+ste.data1$var <- gsub('STE_','',row.names(ste.data1))
 
 pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
-    geom_histogram(stat='identity') +
-    coord_flip() +
-    theme_bw() +
-    xlab("STE dimension") +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+    ste_hist() +
+    xlab("STE dimension") 
 
-# Data type
-pDatatype <-  ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-  ggplot(aes(outcome_data_typ)) +
-    geom_histogram(stat='count') +
-    xlab("Data type") +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
- 
-# Perceived vs observed
-pDataobs <-  ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-  ggplot(aes(outcome_obs)) +
-    geom_histogram(stat='count') +
-    xlab("Data 'observer'") +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+plot_grid(pOut_domain, pDatatype,pDataobs,pSTE,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 
-# Perceived vs observed
- ext.data %>% 
-    filter(exclude=='FALSE') %>% 
-    group_by(outcome_obs,outcome_domain) %>% 
-    summarise(total=n()) %>% 
-  ggplot(aes(x=reorder(outcome_domain,total),y=total, fill=outcome_obs)) +
-    geom_histogram(stat='identity',position=position_dodge()) +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-plot_grid(pIntervention, pOutcome_domain,pStudyType,pSTE,pDatatype,pDataobs,  labels=letters[1:6], ncol = 3, nrow = 2, hjust=-1)
-
-
-ggsave(paste0(datadir,'STE data summaries.jpg'),width = 10.5,height = 6)
-  
 ```
 
 ### Global map
@@ -176,9 +286,9 @@ world <-  map_data("world") %>%
 # Summarise data by country
 ctry <- ext.data %>% 
   filter(exclude=='FALSE') %>% 
-  group_by(articleID,country) %>% 
+  group_by(articleID,stdy_ctry) %>% 
   summarise(num=n()) %>% 
-  separate(country,c('ctry1','ctry2'),sep=",",remove = F) %>% 
+  separate(stdy_ctry,c('ctry1','ctry2'),sep=",",remove = F) %>% 
   gather(key=ctry.col,value=ctry,ctry1:ctry2) %>% 
   filter(!is.na(ctry) & !ctry%in%(" United Republic Of")) %>% 
   group_by(ctry) %>% 
@@ -195,3 +305,108 @@ world %>%
     
 ggsave(paste0(datadir,'STE data map.jpg'),width = 13,height = 7)
 ```
+### Values over time
+```{r eval=F}
+STE_time <-ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  select(pub_yr,STE_domain:STE_temporal_scale)
+  STE_time[2:12][!is.na(STE_time[2:12])] <- 1
+  STE_time[2:12][is.na(STE_time[2:12])] <- 0
+  STE_time[2:12] <- apply(STE_time[2:12],2,function(x) as.numeric(x))
+  STE_time <- STE_time %>% 
+  group_by(pub_yr) %>% 
+  summarise_all(sum) %>%
+  arrange(pub_yr)
+  
+pSTE_domain <- ggplot(STE_time,aes(x = pub_yr, y=STE_domain)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('Domain')+ylim(c(0,105))+
+    geom_line(aes(y = cumsum(STE_domain)))
+pSTE_econgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_econgp)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('Econ gp')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_econgp)))
+pSTE_socialgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_socialgp)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('socialgp')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_socialgp)))
+pSTE_sex <- ggplot(STE_time,aes(x = pub_yr, y=STE_sex)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('sex')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_sex)))
+pSTE_ethnicgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_ethnicgp)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('ethnicgp')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_ethnicgp)))
+pSTE_age <- ggplot(STE_time,aes(x = pub_yr, y=STE_age)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('age')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_age)))
+pSTE_occupation <- ggplot(STE_time,aes(x = pub_yr, y=STE_occupation)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('occupation')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_occupation)))
+pSTE_organization <- ggplot(STE_time,aes(x = pub_yr, y=STE_organization)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('organizationp')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_organization)))
+pSTE_spatial_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_spatial_units)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('spatial_units')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_spatial_units)))
+pSTE_temporal_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_units)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_units')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_temporal_units)))
+pSTE_temporal_scale <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_scale)) +
+    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_scale')+ylim(c(0,50))+
+    geom_line(aes(y = cumsum(STE_temporal_scale)))
+
+plot_grid(pSTE_domain, pSTE_econgp,pSTE_socialgp,pSTE_sex,
+          pSTE_ethnicgp,pSTE_age,pSTE_occupation,pSTE_organization,
+          pSTE_spatial_units,pSTE_temporal_units,pSTE_temporal_scale,
+          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+ggsave(paste0(datadir,'STE over time.jpg'),width = 13,height = 7)
+
+
+minyr <- min(ext.data$pub_yr)-1;maxyr <- max(ext.data$pub_yr)+1
+pInt_time <-ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(articleID,pub_yr,int_typ) %>% 
+  summarise(num=n()) %>%
+  ungroup() %>% 
+  select(pub_yr,int_typ)%>% 
+  ggplot(aes(pub_yr)) +
+  geom_bar(aes(fill = int_typ)) +
+  scale_x_continuous("Publyear", breaks=seq(minyr,maxyr,5)) 
+
+  
+pStudy_typ_time <-ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(articleID,pub_yr,study_typ) %>% 
+  summarise(num=n()) %>%
+  ungroup() %>% 
+  select(pub_yr,study_typ)%>% 
+  ggplot(aes(pub_yr)) +
+  geom_bar(aes(fill = study_typ)) +
+  scale_x_continuous("Publyear", breaks=seq(minyr,maxyr,5)) 
+
+pStudy_typ_time <-ext.data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(articleID,pub_yr,study_typ) %>% 
+  summarise(num=n()) %>%
+  ungroup() %>% 
+  select(pub_yr,study_typ)%>% 
+  ggplot(aes(pub_yr)) +
+  geom_bar(aes(fill = study_typ)) +
+  scale_x_continuous("Publyear", breaks=seq(minyr,maxyr,5)) 
+
+plot_grid(pInt_time+theme(legend.position="right"), pStudy_typ_time+theme(legend.position="right"),
+          labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'study over time.jpg'),width = 10.5,height = 6)
+
+
+  
+```
+
+
+# Perceived vs observed
+ ext.data %>% 
+    filter(exclude=='FALSE') %>% 
+    group_by(outcome_obs,outcome_domain) %>% 
+    summarise(total=n()) %>% 
+  ggplot(aes(x=reorder(outcome_domain,total),y=total, fill=outcome_obs)) +
+    geom_histogram(stat='identity',position=position_dodge()) +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
