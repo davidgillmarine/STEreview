@@ -27,11 +27,10 @@ library(countrycode) # for assigning ISO codes
 library(cowplot)
 library(ggplot2)
 library(tidyverse)
-library(dplyr)
 
 # Directories
 dropbox <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
-datadir <- "C:/Users/dgill6/Documents/Data analysis/STEreview/"
+datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 ```
@@ -235,20 +234,24 @@ ggsave(paste0(datadir,'STE study info.jpg'),width = 10.5,height = 6)
 ### Outcome plots
 ```{r eval=F}
 # Outcome domain
-pOut_domain <- ste_hist_o('outcome_domain') %>% 
+pOut_domain <- ste_gp_o('outcome_domain') %>% 
 ggplot(aes(x=reorder(outcome_domain,num),y=num))+
   ste_hist() +
   xlab('Outcome domain')
 
 # Data type
-pDatatype <-  ste_hist_o('outcome_data_typ') %>% 
+pDatatype <-  ste_gp_o('outcome_data_typ') %>% 
   ggplot(aes(x=reorder(outcome_data_typ,num),y=num))+
   ste_hist() +
   xlab("Outcome data type")
  
 # Perceived vs observed
-pDataobs <- ste_hist_o('outcome_obs') %>% 
-  ggplot(aes(x=reorder(outcome_obs,num),y=num))+
+table(ext.data$outcome_obs)
+ext.data$outcome_obs1 <- ifelse(ext.data$outcome_obs%in%c('Researcher','Respondent'),
+                                ext.data$outcome_obs,"Both")
+table(ext.data$outcome_obs1)
+pDataobs <- ste_gp_o('outcome_obs1') %>% 
+  ggplot(aes(x=reorder(outcome_obs1,num),y=num))+
   ste_hist() +
   xlab("Data 'observer'")
 
@@ -264,7 +267,8 @@ pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
     ste_hist() +
     xlab("STE dimension") 
 
-plot_grid(pOut_domain, pDatatype,pDataobs,pSTE,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+plot_grid(pInt_typ,pDatatype,pDataobs,pStudy_typ,pOut_domain, pSTE,labels=letters[1:6], 
+          ncol = 3, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 
 ```
