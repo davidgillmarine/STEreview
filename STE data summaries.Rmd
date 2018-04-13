@@ -4,7 +4,7 @@ author: "David Gill"
 date: "January 31, 2018"
 output: html_document
 ---
-## Descriptive data
+## Functions, packages, and directories
 ```{r eval=F}
 # Clear workspace
 rm(list = ls())
@@ -36,11 +36,12 @@ wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 ```
 ### Read in and clean up dataframe
 ```{r eval=F}
-ext.data <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
+ext.table <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
+paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
 
 # clean up variable names
-names(ext.data) <- gsub(" ","_",names(ext.data))
-ext.data <- ext.data %>% 
+names(ext.table) <- gsub(" ","_",names(ext.table))
+ext.data <- ext.table %>% 
     rename(articleID='Data_extraction_questionnaire.01_Article_ID',
            exclude='05_Exclude',
            pub_typ='11_Publication_type',
@@ -94,8 +95,8 @@ ext.data <- ext.data %>%
            STE_temporal_units='420_STE:_temporal_units',
            STE_temporal_scale='421_STE:_temporal_scales')
 
-# remove unwanted variables and those entries that are not completed as yet
-unwanted.var <- grep('(\\d)',names(ext.data),value = T)
+# remove open-ended or unneeded variables
+unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still contain a number in the name
 ext.data <- ext.data %>% 
   filter(!is.na(int_typ) & !is.na(outcome_domain)) %>% 
   select(-one_of(unwanted.var)) %>%
@@ -155,7 +156,7 @@ minyr <- min(ext.data$pub_yr)-1;maxyr <- max(ext.data$pub_yr)+1
 pPubyr<- ext.data %>% 
     filter(exclude=='FALSE') %>% 
     group_by(articleID,pub_yr) %>% 
-    summarise(num=n()) %>% 
+    summarise() %>% 
     ggplot(aes(pub_yr))+
     geom_histogram(stat='count') +
     scale_x_continuous("Publication year", breaks=seq(minyr,maxyr,5)) +
@@ -217,14 +218,17 @@ pCountry<-ste_gp(~articleID,~stdy_ctry) +
   xlab("Study country")
 
 
+# About study
 plot_grid(pExclude,pPubyr,pPubtype,pAuth_aff,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE pub info.jpg'),width = 10.5,height = 6)
 
+# About intervention
 plot_grid(pInt_typ,pInt_scale,pBiome,pCountry
           ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE intervention info.jpg'),width = 14,height = 9)
 
+# About study
 plot_grid(pStudy_typ,pStdy_source,pStdy_scl,pCtrl_gp,pCtrl_typ,
           labels=letters[1:5], ncol = 3, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE study info.jpg'),width = 10.5,height = 6)
@@ -267,8 +271,8 @@ pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
     ste_hist() +
     xlab("STE dimension") 
 
-plot_grid(pInt_typ,pDatatype,pDataobs,pStudy_typ,pOut_domain, pSTE,labels=letters[1:6], 
-          ncol = 3, nrow = 2, hjust=-1)
+plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
+          ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 
 ```
@@ -279,13 +283,16 @@ ggsave(paste0(datadir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 world <-  map_data("world") %>% 
   fortify(world,region="group") %>% 
   mutate(iso3=countrycode(region, "country.name", "iso3c"),
-       iso3=ifelse(region=='Ascension Island','SHN',iso3),iso3=ifelse(region=='Barbuda','ATG',iso3),
+       iso3=ifelse(region=='Ascension Island','SHN',iso3),
+       iso3=ifelse(region=='Barbuda','ATG',iso3),
        iso3=ifelse(region=='Bonaire','ANT',iso3),
-       iso3=ifelse(region=='Canary Islands','ESP',iso3),iso3=ifelse(region=='Chagos Archipelago','IOT',iso3),
+       iso3=ifelse(region=='Canary Islands','ESP',iso3),
+       iso3=ifelse(region=='Chagos Archipelago','IOT',iso3),
        iso3=ifelse(region=='Grenadines','VCT',iso3),
        iso3=ifelse(region=='Saba','ANT',iso3),
-       iso3=ifelse(region=='Saint Martin','MAF',iso3),iso3=ifelse(region=='Sint Eustatius','ANT',iso3),
-      iso3=ifelse(region=='Virgin Islands','VGB',iso3))
+       iso3=ifelse(region=='Saint Martin','MAF',iso3),
+       iso3=ifelse(region=='Sint Eustatius','ANT',iso3),
+       iso3=ifelse(region=='Virgin Islands','VGB',iso3))
 
 # Summarise data by country
 ctry <- ext.data %>% 
@@ -299,6 +306,8 @@ ctry <- ext.data %>%
   summarise(total=n()) %>% 
   mutate(iso3=countrycode(ctry, "country.name", "iso3c"))
 
+nrow(ctry)
+
 #plot
 ste.map <-   world %>% 
   filter(iso3%in%ctry$iso3)
@@ -311,49 +320,52 @@ ggsave(paste0(datadir,'STE data map.jpg'),width = 13,height = 7)
 ```
 ### Values over time
 ```{r eval=F}
-STE_time <-ext.data %>% 
-  filter(exclude=='FALSE') %>% 
-  select(pub_yr,STE_domain:STE_temporal_scale)
-  STE_time[2:12][!is.na(STE_time[2:12])] <- 1
-  STE_time[2:12][is.na(STE_time[2:12])] <- 0
-  STE_time[2:12] <- apply(STE_time[2:12],2,function(x) as.numeric(x))
-  STE_time <- STE_time %>% 
+STE_time <-ext.data %>%
+  select(articleID,pub_yr,STE_domain:STE_temporal_scale) %>%  # replace to your needs
+  group_by(articleID,pub_yr) %>% 
+  summarise_all(funs(sum(!is.na(.))))  %>% 
+  arrange(pub_yr) %>% 
+  ungroup() %>% 
+  add_count(pub_yr) %>% 
+  rename(num.articles=n) %>% 
+  mutate_at(vars(STE_domain:STE_temporal_scale),funs(ifelse(.>0,1,0))) %>% 
+  mutate_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles)) %>% 
   group_by(pub_yr) %>% 
-  summarise_all(sum) %>%
-  arrange(pub_yr)
-  
+  summarise_at(vars(STE_domain:STE_temporal_scale),funs(sum))  
+head(STE_time)
+
 pSTE_domain <- ggplot(STE_time,aes(x = pub_yr, y=STE_domain)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('Domain')+ylim(c(0,105))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('Domain')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_domain)))
 pSTE_econgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_econgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('Econ gp')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('Econ gp')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_econgp)))
 pSTE_socialgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_socialgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('socialgp')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('socialgp')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_socialgp)))
 pSTE_sex <- ggplot(STE_time,aes(x = pub_yr, y=STE_sex)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('sex')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('sex')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_sex)))
 pSTE_ethnicgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_ethnicgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('ethnicgp')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('ethnicgp')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_ethnicgp)))
 pSTE_age <- ggplot(STE_time,aes(x = pub_yr, y=STE_age)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('age')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('age')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_age)))
 pSTE_occupation <- ggplot(STE_time,aes(x = pub_yr, y=STE_occupation)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('occupation')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('occupation')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_occupation)))
 pSTE_organization <- ggplot(STE_time,aes(x = pub_yr, y=STE_organization)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('organizationp')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('organizationp')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_organization)))
 pSTE_spatial_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_spatial_units)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('spatial_units')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('spatial_units')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_spatial_units)))
 pSTE_temporal_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_units)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_units')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_units')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_temporal_units)))
 pSTE_temporal_scale <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_scale)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_scale')+ylim(c(0,50))+
+    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_scale')+ylim(c(0,15))+
     geom_line(aes(y = cumsum(STE_temporal_scale)))
 
 plot_grid(pSTE_domain, pSTE_econgp,pSTE_socialgp,pSTE_sex,
@@ -372,17 +384,6 @@ pInt_time <-ext.data %>%
   select(pub_yr,int_typ)%>% 
   ggplot(aes(pub_yr)) +
   geom_bar(aes(fill = int_typ)) +
-  scale_x_continuous("Publyear", breaks=seq(minyr,maxyr,5)) 
-
-  
-pStudy_typ_time <-ext.data %>% 
-  filter(exclude=='FALSE') %>% 
-  group_by(articleID,pub_yr,study_typ) %>% 
-  summarise(num=n()) %>%
-  ungroup() %>% 
-  select(pub_yr,study_typ)%>% 
-  ggplot(aes(pub_yr)) +
-  geom_bar(aes(fill = study_typ)) +
   scale_x_continuous("Publyear", breaks=seq(minyr,maxyr,5)) 
 
 pStudy_typ_time <-ext.data %>% 
