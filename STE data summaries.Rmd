@@ -103,6 +103,11 @@ unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still c
 ext.data <- ext.data %>% 
   select(-one_of(unwanted.var)) %>%
   mutate(ctrl_typ=gsub("Pre-treatment/post-treatment","Pre/post treatment",ctrl_typ))
+  
+
+
+
+
 
 ```
 
