@@ -38,7 +38,10 @@ wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 ```{r eval=F}
 ext.table <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
 paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
-
+if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
+  View(ext.table[ext.table$`05 Exclude`!=ext.table$`40 Exclude`,])
+  ext.table <- ext.table[ext.table$`05 Exclude`==ext.table$`40 Exclude`,]
+}
 # clean up variable names
 names(ext.table) <- gsub(" ","_",names(ext.table))
 ext.data <- ext.table %>% 
@@ -98,26 +101,27 @@ ext.data <- ext.table %>%
 # remove open-ended or unneeded variables
 unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still contain a number in the name
 ext.data <- ext.data %>% 
-  filter(!is.na(int_typ) & !is.na(outcome_domain)) %>% 
   select(-one_of(unwanted.var)) %>%
   mutate(ctrl_typ=gsub("Pre-treatment/post-treatment","Pre/post treatment",ctrl_typ))
+
 ```
 
 ### Basic plot functions
 ```{r eval=F}
+# article level stats
 ste_gp <- function (x,y) {
   ext.data %>% 
     filter(exclude=='FALSE') %>% 
     group_by_(x,y) %>% 
     summarise(num=n()) %>%
-    arrange(num) %>%
+    arrange(-num) %>%
     ggplot(aes_q(y))+
     geom_bar(stat='count') +
     coord_flip() +
     theme_bw() +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 }
-
+# outcome level stats
 ste_gp_o <- function (z) {
  ext.data %>% 
   filter(exclude=='FALSE' & !is.na(z)) %>%
@@ -138,7 +142,7 @@ ste_hist <- function () {
 ### Intervention and study plots
 ```{r eval=F}
 #Percent excluded
-sum(ext.data$exclude)/length(unique(ext.data$articleID))
+length(unique(ext.data$articleID[ext.data$exclude==T]))/length(unique(ext.data$articleID))
 pExclude <- ext.data %>% 
     group_by(articleID,exclude) %>% 
     summarise(num=n()) %>% 
@@ -148,7 +152,6 @@ pExclude <- ext.data %>%
     xlab("Excluded articles") +
     theme_bw() +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-   
 
 # Publication year
 table(ext.data$pub_yr)
@@ -263,6 +266,7 @@ pDataobs <- ste_gp_o('outcome_obs1') %>%
 ste.data <- ext.data %>% 
   filter(exclude=='FALSE') %>% 
   select(STE_domain:STE_temporal_scale)
+
 ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
 names(ste.data1)[1] <- "total"
 ste.data1$var <- gsub('STE_','',row.names(ste.data1))
@@ -321,6 +325,7 @@ ggsave(paste0(datadir,'STE data map.jpg'),width = 13,height = 7)
 ### Values over time
 ```{r eval=F}
 STE_time <-ext.data %>%
+  filter(exclude=='FALSE') %>% 
   select(articleID,pub_yr,STE_domain:STE_temporal_scale) %>%  # replace to your needs
   group_by(articleID,pub_yr) %>% 
   summarise_all(funs(sum(!is.na(.))))  %>% 
@@ -329,50 +334,179 @@ STE_time <-ext.data %>%
   add_count(pub_yr) %>% 
   rename(num.articles=n) %>% 
   mutate_at(vars(STE_domain:STE_temporal_scale),funs(ifelse(.>0,1,0))) %>% 
-  mutate_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles)) %>% 
-  group_by(pub_yr) %>% 
-  summarise_at(vars(STE_domain:STE_temporal_scale),funs(sum))  
+#  mutate_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles)) %>% 
+  group_by(pub_yr,num.articles) %>% 
+  summarise_at(vars(STE_domain:STE_temporal_scale),funs(sum)) %>% 
+  transmute_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles))
 head(STE_time)
 
 pSTE_domain <- ggplot(STE_time,aes(x = pub_yr, y=STE_domain)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('Domain')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_domain)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Domain')+ylim(c(0,60))+geom_line(aes(y = cumsum(STE_domain)))
 pSTE_econgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_econgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('Econ gp')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_econgp)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Econ gp')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_econgp)))
 pSTE_socialgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_socialgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('socialgp')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_socialgp)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('socialgp')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_socialgp)))
 pSTE_sex <- ggplot(STE_time,aes(x = pub_yr, y=STE_sex)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('sex')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_sex)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('sex')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_sex)))
 pSTE_ethnicgp <- ggplot(STE_time,aes(x = pub_yr, y=STE_ethnicgp)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('ethnicgp')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_ethnicgp)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('ethnicgp')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_ethnicgp)))
 pSTE_age <- ggplot(STE_time,aes(x = pub_yr, y=STE_age)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('age')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_age)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('age')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_age)))
 pSTE_occupation <- ggplot(STE_time,aes(x = pub_yr, y=STE_occupation)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('occupation')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_occupation)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('occupation')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_occupation)))
 pSTE_organization <- ggplot(STE_time,aes(x = pub_yr, y=STE_organization)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('organizationp')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_organization)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('organizationp')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_organization)))
 pSTE_spatial_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_spatial_units)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('spatial_units')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_spatial_units)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('spatial_units')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_spatial_units)))
 pSTE_temporal_units <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_units)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_units')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_temporal_units)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_units')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_temporal_units)))
 pSTE_temporal_scale <- ggplot(STE_time,aes(x = pub_yr, y=STE_temporal_scale)) +
-    ylab("Frequency") + xlab("Year")+ ggtitle('temporal_scale')+ylim(c(0,15))+
-    geom_line(aes(y = cumsum(STE_temporal_scale)))
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_scale')+ylim(c(0,40))+geom_line(aes(y = cumsum(STE_temporal_scale)))
 
 plot_grid(pSTE_domain, pSTE_econgp,pSTE_socialgp,pSTE_sex,
           pSTE_ethnicgp,pSTE_age,pSTE_occupation,pSTE_organization,
           pSTE_spatial_units,pSTE_temporal_units,pSTE_temporal_scale,
           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
 ggsave(paste0(datadir,'STE over time.jpg'),width = 13,height = 7)
+
+STE_time_percent <-ext.data %>%
+  filter(exclude=='FALSE') %>% 
+  select(articleID,pub_yr,STE_domain:STE_temporal_scale) %>%  # replace to your needs
+  group_by(articleID,pub_yr) %>% 
+  summarise_all(funs(sum(!is.na(.))))  %>% 
+  arrange(pub_yr) %>% 
+  ungroup() %>% 
+  add_count(pub_yr) %>% 
+  rename(num.articles=n) %>% 
+  mutate_at(vars(STE_domain:STE_temporal_scale),funs(ifelse(.>0,1,0))) %>% 
+  group_by(pub_yr,num.articles) %>% 
+  summarise_at(vars(STE_domain:STE_temporal_scale),funs(sum)) %>% 
+  transmute_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles))
+head(STE_time_percent)
+
+pSTE_domain <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_domain)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Domain')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_domain)))
+pSTE_econgp <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_econgp)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Econ gp')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_econgp)))
+pSTE_socialgp <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_socialgp)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('socialgp')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_socialgp)))
+pSTE_sex <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_sex)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('sex')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_sex)))
+pSTE_ethnicgp <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_ethnicgp)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('ethnicgp')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_ethnicgp)))
+pSTE_age <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_age)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('age')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_age)))
+pSTE_occupation <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_occupation)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('occupation')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_occupation)))
+pSTE_organization <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_organization)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('organizationp')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_organization)))
+pSTE_spatial_units <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_spatial_units)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('spatial_units')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_spatial_units)))
+pSTE_temporal_units <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_temporal_units)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_units')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_temporal_units)))
+pSTE_temporal_scale <- ggplot(STE_time_percent,aes(x = pub_yr, y=STE_temporal_scale)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_scale')+ylim(c(0,20))+geom_line(aes(y = cumsum(STE_temporal_scale)))
+
+plot_grid(pSTE_domain, pSTE_econgp,pSTE_socialgp,pSTE_sex,
+          pSTE_ethnicgp,pSTE_age,pSTE_occupation,pSTE_organization,
+          pSTE_spatial_units,pSTE_temporal_units,pSTE_temporal_scale,
+          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+ggsave(paste0(datadir,'STE over time_percent.jpg'),width = 13,height = 7)
+
+# By year and intervention
+STE_time_int <-ext.data %>%
+  filter(exclude=='FALSE') %>% 
+  select(articleID,pub_yr,int_typ,STE_domain:STE_temporal_scale) %>%  # replace to your needs
+  group_by(articleID,pub_yr,int_typ) %>% 
+  summarise_all(funs(sum(!is.na(.))))  %>% 
+  arrange(pub_yr) %>% 
+  ungroup() %>% 
+  add_count(pub_yr,int_typ) %>% 
+  rename(num.articles=n) %>% 
+  mutate_at(vars(STE_domain:STE_temporal_scale),funs(ifelse(.>0,1,0))) %>% 
+#  mutate_at(vars(STE_domain:STE_temporal_scale),funs(./num.articles)) %>% 
+  group_by(pub_yr,int_typ,num.articles) %>% 
+  summarise_at(vars(STE_domain:STE_temporal_scale),funs(sum)) %>% 
+  gather(key=dimension,value=val,STE_domain:STE_temporal_scale) 
+#  filter(val>0)
+View(STE_time_int)
+
+STE_time_int %>% 
+  filter(dimension=='STE_domain' & val>0) %>% pull(pub_yr) 
+
+ggplot(filter(STE_time_int,dimension=='STE_domain'),aes(x = pub_yr, y=val,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Domain')+ylim(c(0,20))+geom_area(aes(y = cumsum(val)),position = "identity") 
+
+pSTE_domain <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_domain,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Domain')+ylim(c(0,60))+geom_area(aes(y = cumsum(STE_domain)),position = "identity")
+pSTE_econgp <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_econgp,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Econgp')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_econgp)),position = "identity")
+pSTE_socialgp <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_socialgp,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('Socialgp')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_socialgp)),position = "identity")
+pSTE_sex <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_sex,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('sex')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_sex)),position = "identity")
+pSTE_ethnicgp <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_ethnicgp,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('ethnicgp')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_ethnicgp)),position = "identity")
+pSTE_age <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_age,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('age')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_age)),position = "identity")
+pSTE_occupation <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_occupation,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('occupation')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_occupation)),position = "identity")
+pSTE_organization <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_organization,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('organizationp')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_organization)),position = "identity")
+pSTE_spatial_units <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_spatial_units,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('spatial_units')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_spatial_units)),position = "identity")
+pSTE_temporal_units <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_temporal_units,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_units')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_temporal_units)),position = "identity")
+pSTE_temporal_scale <- ggplot(STE_time_int,aes(x = pub_yr, y=STE_temporal_scale,fill=int_typ,alpha=0.5)) +
+    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2015,5)) +
+    ggtitle('temporal_scale')+ylim(c(0,40))+geom_area(aes(y = cumsum(STE_temporal_scale)),position = "identity")
+
+plot_grid(pSTE_domain + theme(legend.position="none"), 
+          pSTE_econgp + theme(legend.position="none"),
+          pSTE_socialgp + theme(legend.position="none"),
+          pSTE_sex + theme(legend.position="none"),
+          pSTE_ethnicgp + theme(legend.position="none"),
+          pSTE_age + theme(legend.position="none"), 
+          pSTE_occupation + theme(legend.position="none"),
+          pSTE_organization + theme(legend.position="none"),
+          pSTE_spatial_units + theme(legend.position="none"),
+          pSTE_temporal_units + theme(legend.position="none"),
+          pSTE_temporal_scale,
+          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+ggsave(paste0(datadir,'STE over time_intervention.jpg'),width = 18,height = 10)
 
 
 minyr <- min(ext.data$pub_yr)-1;maxyr <- max(ext.data$pub_yr)+1
