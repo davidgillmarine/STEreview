@@ -20,6 +20,11 @@ library(dplyr)
 # Directories
 dropbox <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
 datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
+
+##On Sam's comp
+dropbox <- "~/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
+datadir <- "~/Documents/github/marine_ste/data/"
+
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 
@@ -240,70 +245,89 @@ dev.off()
 ##Plot countries
 # #load in full country list
 country <- read.csv(paste0(datadir,"allcountries.csv"), head=TRUE, sep=",")
- # names(country) <- c("Study_country", "Region", "Code", "Subregion")
- # regions <- country
- # regions <- arrange(regions,Region)
-# 
-# ##Count number of studies for all countries and arrange by region
-# country_count <- matrix(nrow=nrow(regions), ncol=2)
-# rownames(country_count) <- regions$Study_country
-# colnames(country_count) <- c("Study_country", "counts")
-# #Calculate in for loop and write to blank matrix
-# for (c in regions$Study_country){
-#   subset <- filter(data, Study_country == c)
-#   country_count[c,1] <- c
-#   country_count[c,2] <- as.numeric(n_distinct(subset$aid))
-# }
-# #Remove rownames and reformat data types
-# rownames(country_count) = NULL
-# country_count <- as.data.frame(country_count, stringsAsFactors=FALSE)
-# countries_only <- inner_join(country_count,regions,by="Study_country")
-# countries_only <- filter(countries_only, Code != "")
-# 
-# countries_only$counts <- as.numeric(countries_only$counts)
-# countries_only <- as.data.frame(countries_only)
-# countries_zero <- filter(countries_only, counts == 0)
-# 
-# 
-# pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
-# ggplot() + 
-#   geom_map(data=countries_only, aes(map_id=Code, fill=counts),map=map) + 
-#   geom_map(data=countries_zero, aes(map_id=Code),fill="#f0f0f0",map=map) + 
-#   expand_limits(x=map$long,y=map$lat) + 
-#   theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
-#   scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(countries_only$counts)/2),limits=c(0,max(countries_only$counts)))
-# dev.off()
+names(country) <- c("Study_country", "Region", "Code", "Subregion")
+regions <- country
+regions <- arrange(regions,Region)
+
+#Fix aids with multiple countries
+
+
+ctry <- data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(aid,Study_country) %>% 
+  summarise() %>% 
+  separate(Study_country,c('ctry1','ctry2'),sep=",",remove = F) %>%
+  filter(ctry2 != " United Republic Of") %>%
+  filter(ctry2 != " Province Of China") %>%
+  gather(key=ctry.col,value=ctry,ctry1:ctry2) %>%
+  select(aid,ctry)
+
+colnames(ctry) <- c("aid","Study_country")
+
+for_plotting <- select(data,aid,Study_country)
+ctry <- bind_rows(ctry,for_plotting)
+
+##Count number of studies for all countries and arrange by region
+country_count <- matrix(nrow=nrow(regions), ncol=2)
+rownames(country_count) <- regions$Study_country
+colnames(country_count) <- c("Study_country", "counts")
+#Calculate in for loop and write to blank matrix
+for (c in regions$Study_country){
+  subset <- filter(ctry, Study_country == c)
+  country_count[c,1] <- c
+  country_count[c,2] <- as.numeric(n_distinct(subset$aid))
+}
+#Remove rownames and reformat data types
+rownames(country_count) = NULL
+country_count <- as.data.frame(country_count, stringsAsFactors=FALSE)
+countries_only <- inner_join(country_count,regions,by="Study_country")
+countries_only <- filter(countries_only, Code != "")
+
+countries_only$counts <- as.numeric(countries_only$counts)
+countries_only <- as.data.frame(countries_only)
+countries_zero <- filter(countries_only, counts == 0)
 
 map <- readShapeSpatial(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 plot(map)
 map <- fortify(map, region="ISO3")
 
-
-# Summarise data by country (ignore warnings)
-ctry <- data %>% 
-  filter(exclude=='FALSE') %>% 
-  group_by(aid,Study_country) %>% 
-  summarise() %>% 
-  separate(Study_country,c('ctry1','ctry2'),sep=",",remove = F) %>% 
-  gather(key=ctry.col,value=ctry,ctry1:ctry2) %>% 
-  filter(!is.na(ctry) & !ctry%in%c(" United Republic Of"," Province Of China")) %>% 
-  mutate(ctry=gsub(" Philippines","Philippines",ctry),
-         ctry=gsub(" Mexico","Mexico",ctry),
-         iso3=countrycode(ctry, "country.name", "iso3c"))%>% 
-  group_by(ctry,iso3) %>% 
-  count() %>% 
-  ungroup() 
-  
-nrow(ctry)
-
 pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
-ggplot() + 
-  geom_map(data=country, aes(map_id=code),fill="#f0f0f0",alpha=0.25,map=map) + 
-  geom_map(data=ctry, aes(map_id=iso3, fill=n),map=map) + 
-  expand_limits(x=map$long,y=map$lat) + 
-  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
-  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(ctry$n)/2),limits=c(1,max(ctry$n)))
+ggplot() +
+  geom_map(data=countries_only, aes(map_id=Code, fill=counts),map=map) +
+  geom_map(data=countries_zero, aes(map_id=Code),fill="#f0f0f0",map=map) +
+  expand_limits(x=map$long,y=map$lat) +
+  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(countries_only$counts)/2),limits=c(0,max(countries_only$counts)))
 dev.off()
+
+# 
+# 
+# 
+# # Summarise data by country (ignore warnings)
+# ctry <- data %>% 
+#   filter(exclude=='FALSE') %>% 
+#   group_by(aid,Study_country) %>% 
+#   summarise() %>% 
+#   separate(Study_country,c('ctry1','ctry2'),sep=",",remove = F) %>% 
+#   gather(key=ctry.col,value=ctry,ctry1:ctry2) %>% 
+#   filter(!is.na(ctry) & !ctry%in%c(" United Republic Of"," Province Of China")) %>% 
+#   mutate(ctry=gsub(" Philippines","Philippines",ctry),
+#          ctry=gsub(" Mexico","Mexico",ctry),
+#          iso3=countrycode(ctry, "country.name", "iso3c")) %>% 
+#   group_by(ctry,iso3) %>% 
+#   count() %>% 
+#   ungroup() 
+#   
+# nrow(ctry)
+# 
+# pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+# ggplot() + 
+#   geom_map(data=country, aes(map_id=code),fill="#f0f0f0",alpha=0.25,map=map) + 
+#   geom_map(data=ctry, aes(map_id=iso3, fill=n),map=map) + 
+#   expand_limits(x=map$long,y=map$lat) + 
+#   theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+#   scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(ctry$n)/2),limits=c(1,max(ctry$n)))
+# dev.off()
 
 ########
 ## Trying with chord diagram instead
