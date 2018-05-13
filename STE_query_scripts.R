@@ -9,6 +9,9 @@ library(d3Network)
 library(treemap)
 library(maptools)
 library(rio)
+library(countrycode)
+library(reshape)
+library(circlize)
 library(dplyr)
 
 # setwd("~/Documents/github/marine_ste/")
@@ -21,11 +24,11 @@ datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 
 ext.table <- import(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
-paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
-if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
-  View(ext.table[ext.table$`05 Exclude`!=ext.table$`40 Exclude`,])
-  ext.table <- ext.table[ext.table$`05 Exclude`==ext.table$`40 Exclude`,]
-}
+# paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
+# if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
+#   View(ext.table[ext.table$`05 Exclude`!=ext.table$`40 Exclude`,])
+#   ext.table <- ext.table[ext.table$`05 Exclude`==ext.table$`40 Exclude`,]
+# }
 # clean up variable names
 names(ext.table) <- gsub(" ","_",names(ext.table))
 ext.data <- ext.table %>% 
@@ -44,7 +47,7 @@ ext.data <- ext.table %>%
          DOI="19_DOI",
          Source="110_Source",
          Bib_notes="111_notes_on_bibliography",
-         int_typ='22_Type_of_intervention',
+         Int_type='22_Type_of_intervention',
          int_scale='24_Geographic_scale_of_intervention',           
          int_time='25_Timeframe_of_intervention',           
          int_auth='27_Managing_authority',           
@@ -107,6 +110,7 @@ unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still c
 data <- ext.data %>% 
   select(-one_of(unwanted.var)) %>%
   mutate(Comp_type=gsub("Pre-treatment/post-treatment","Pre/post treatment",Comp_type),
+         Int_type=gsub("CBNRM, MPA","CBNRM_MPA",Int_type),
          Affil_type.Academic=ifelse(grepl("Academic",auth_aff),1,0),
          Affil_type.Public_sector=ifelse(grepl("Public",auth_aff),1,0),
          Affil_type.Research_Institute=ifelse(grepl("Research",auth_aff),1,0),
@@ -114,10 +118,10 @@ data <- ext.data %>%
          Affil_type.Non_profit=ifelse(grepl("profit",auth_aff),1,0),
          Affil_type.Private_sector=ifelse(grepl("Private",auth_aff),1,0),
          Affil_type.International_Organization=ifelse(grepl("International",auth_aff),1,0),
-         Int_type.MPA=ifelse(grepl("MPA",int_typ),1,0),
-         Int_type.PES=ifelse(grepl("PES",int_typ),1,0),
-         Int_type.CBNRM=ifelse(grepl("CBNRM",int_typ),1,0),
-         Int_type.Certification=ifelse(grepl("Certification",int_typ),1,0),
+         Int_type.MPA=ifelse(grepl("MPA",Int_type),1,0),
+         Int_type.PES=ifelse(grepl("PES",Int_type),1,0),
+         Int_type.CBNRM=ifelse(grepl("CBNRM",Int_type),1,0),
+         Int_type.Certification=ifelse(grepl("Certification",Int_type),1,0),
          Int_geo.local=ifelse(grepl("Local",int_scale),1,0),
          Int_geo.region=ifelse(grepl("Region",int_scale),1,0),
          Int_geo.national=ifelse(grepl("National",int_scale),1,0),
@@ -128,34 +132,45 @@ data <- ext.data %>%
          Mang_auth.Private_governance=ifelse(grepl("private",int_auth,ignore.case = T),1,0),
          Mang_auth.Indigenous_community_governance=ifelse(grepl("Indigenous",int_auth,ignore.case = T),1,0),
          Mang_auth.multiple=ifelse(grepl("multiple",int_auth),1,0),  
-         Mang_auth.mixed=ifelse(grepl("mixed",int_auth,ignore.case = T),1,0))
+         Mang_auth.mixed=ifelse(grepl("mixed",int_auth,ignore.case = T),1,0)) %>% 
+        filter(exclude==FALSE)
+         
 # View(select(ext.data,auth_aff,Affil_type.Academic:Affil_type.International_Organization))
-# View(select(ext.data,int_typ,Int_type.MPA:Int_type.Certification))
+# View(select(ext.data,Int_type,Int_type.MPA:Int_type.Certification))
 # View(select(ext.data,int_scale,Int_geo.local:Int_geo.international))
 # View(select(ext.data,int_auth,Mang_auth.Government:Mang_auth.mixed))
 
 ##########################################
-out_type <- c("Economic well-being","Health","Political empowerment","Social capital","Education","Culture")
-int_type <- c("MPA","PES","CBNRM","Certification")
+io_counts <- data %>% 
+        filter(exclude==FALSE) %>% 
+        group_by(Int_type,Out_type) %>% 
+        count() %>% 
+        spread(key=Int_type, value=n) %>% 
+        mutate(PES=0) %>%
+        gather("Int_type","n",CBNRM:PES) %>% 
+        mutate(n=ifelse(is.na(n),0,as.integer(n)))
 
-io_counts = matrix(nrow=6, ncol=4)
-rownames(io_counts) <- out_type
-colnames(io_counts) <-int_type
+# out_type <- c("Economic well-being","Health","Political empowerment","Social capital","Education","Culture")
+# int_type <- c("MPA","PES","CBNRM","CBNRM_MPA","Certification")
+# 
+# io_counts = matrix(nrow=6, ncol=5)
+# rownames(io_counts) <- out_type
+# colnames(io_counts) <-int_type
+# 
+# for (i in int_type){
+#   for (j in out_type){
+#     subset <- filter(data, Out_type == j, Int_type == i)
+#     io_counts[j,i] <- n_distinct(subset$aid)
+#   }
+# }
+# 
+# rownames(io_counts) <- out_type
+# colnames(io_counts) <- int_type
+# io_counts <- as.data.frame(io_counts)
+# io_counts$Out_type <- rownames(io_counts)
+# io_counts <- gather(io_counts,"Int_type","n",1:5)
 
-for (i in int_type){
-  for (j in out_type){
-    subset <- filter(data, Out_type == j, Int_type == i)
-    io_counts[j,i] <- n_distinct(subset$aid)
-  }
-}
-
-rownames(io_counts) <- out_type
-colnames(io_counts) <- int_type
-io_counts <- as.data.frame(io_counts)
-io_counts$Out_type <- rownames(io_counts)
-io_counts <- gather(io_counts,"Int_type","n",1:4)
-
-pdf(file="STE_Int_Outcome_Heatmap_articles_test.pdf", width=11, height=8.5)
+pdf(file=paste0(datadir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
 ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   geom_tile(color="gray90",size=0.1) +
   geom_text(aes(label=n, color="white")) +
@@ -187,7 +202,7 @@ ste_outcomes3 <- ste_outcomes2 %>% select(-aid)
 ste_types <- c("STE_domain","STE_econ","STE_social","STE_sex","STE_ethnic","STE_age","STE_occupation","STE_social_org","STE_spatial","STE_temporal_unit","STE_temporal_scale")
 
 matrix <- count(ste_outcomes3,Out_type,Int_type,ste_type)
-matrix2 <- matrix %>% ungroup() %>% mutate(Int_type=factor(Int_type, levels=c("MPA","CBNRM","Certification")))
+matrix2 <- matrix %>% ungroup() %>% mutate(Int_type=factor(Int_type, levels=c("MPA","CBNRM","CBNRM_MPA","Certification")))
 matrix2$n <- as.numeric(matrix2$n)
 
 all_poss <- expand.grid(Out_type=unique(matrix2$Out_type),ste_type=unique(matrix2$ste_type),Int_type=unique(matrix2$Int_type))
@@ -216,63 +231,90 @@ gg <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) +
   theme(legend.key.width=unit(1, "cm")) +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=7))
 
-pdf(file="STE_type_Int_Outcome_Heatmap_5_11.pdf", width=11, height=8.5)
+pdf(file=paste0(datadir,"STE_type_Int_Outcome_Heatmap_5_11.pdf"), width=11, height=8.5)
 gg
 dev.off()
 
 #############################################################################
 
 ##Plot countries
-#load in full country list
-country <- read.csv("data/allcountries.csv", head=TRUE, sep=",")
-names(country) <- c("Study_country", "Region", "Code", "Subregion")
-regions <- country
-regions <- arrange(regions,Region)
+# #load in full country list
+country <- read.csv(paste0(datadir,"allcountries.csv"), head=TRUE, sep=",")
+ # names(country) <- c("Study_country", "Region", "Code", "Subregion")
+ # regions <- country
+ # regions <- arrange(regions,Region)
+# 
+# ##Count number of studies for all countries and arrange by region
+# country_count <- matrix(nrow=nrow(regions), ncol=2)
+# rownames(country_count) <- regions$Study_country
+# colnames(country_count) <- c("Study_country", "counts")
+# #Calculate in for loop and write to blank matrix
+# for (c in regions$Study_country){
+#   subset <- filter(data, Study_country == c)
+#   country_count[c,1] <- c
+#   country_count[c,2] <- as.numeric(n_distinct(subset$aid))
+# }
+# #Remove rownames and reformat data types
+# rownames(country_count) = NULL
+# country_count <- as.data.frame(country_count, stringsAsFactors=FALSE)
+# countries_only <- inner_join(country_count,regions,by="Study_country")
+# countries_only <- filter(countries_only, Code != "")
+# 
+# countries_only$counts <- as.numeric(countries_only$counts)
+# countries_only <- as.data.frame(countries_only)
+# countries_zero <- filter(countries_only, counts == 0)
+# 
+# 
+# pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+# ggplot() + 
+#   geom_map(data=countries_only, aes(map_id=Code, fill=counts),map=map) + 
+#   geom_map(data=countries_zero, aes(map_id=Code),fill="#f0f0f0",map=map) + 
+#   expand_limits(x=map$long,y=map$lat) + 
+#   theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+#   scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(countries_only$counts)/2),limits=c(0,max(countries_only$counts)))
+# dev.off()
 
-##Count number of studies for all countries and arrange by region
-country_count <- matrix(nrow=nrow(regions), ncol=2)
-rownames(country_count) <- regions$Study_country
-colnames(country_count) <- c("Study_country", "counts")
-#Calculate in for loop and write to blank matrix
-for (c in regions$Study_country){
-  subset <- filter(data, Study_country.x == c)
-  country_count[c,1] <- c
-  country_count[c,2] <- as.numeric(n_distinct(subset$aid))
-}
-#Remove rownames and reformat data types
-rownames(country_count) = NULL
-country_count <- as.data.frame(country_count, stringsAsFactors=FALSE)
-countries_only <- inner_join(country_count,regions,by="Study_country")
-countries_only <- filter(countries_only, Code != "")
-
-countries_only$counts <- as.numeric(countries_only$counts)
-countries_only <- as.data.frame(countries_only)
-countries_zero <- filter(countries_only, counts == 0)
-
-map <- readShapeSpatial("data/TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp")
+map <- readShapeSpatial(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 plot(map)
 map <- fortify(map, region="ISO3")
 
-pdf(file="STE_Country_Map_dark_5_11.pdf", width=16, height=8.5)
+
+# Summarise data by country (ignore warnings)
+ctry <- data %>% 
+  filter(exclude=='FALSE') %>% 
+  group_by(aid,Study_country) %>% 
+  summarise() %>% 
+  separate(Study_country,c('ctry1','ctry2'),sep=",",remove = F) %>% 
+  gather(key=ctry.col,value=ctry,ctry1:ctry2) %>% 
+  filter(!is.na(ctry) & !ctry%in%c(" United Republic Of"," Province Of China")) %>% 
+  mutate(ctry=gsub(" Philippines","Philippines",ctry),
+         ctry=gsub(" Mexico","Mexico",ctry),
+         iso3=countrycode(ctry, "country.name", "iso3c"))%>% 
+  group_by(ctry,iso3) %>% 
+  count() %>% 
+  ungroup() 
+  
+nrow(ctry)
+
+pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
 ggplot() + 
-  geom_map(data=countries_only, aes(map_id=Code, fill=counts),map=map) + 
-  geom_map(data=countries_zero, aes(map_id=Code),fill="#f0f0f0",map=map) + 
+  geom_map(data=country, aes(map_id=code),fill="#f0f0f0",alpha=0.25,map=map) + 
+  geom_map(data=ctry, aes(map_id=iso3, fill=n),map=map) + 
   expand_limits(x=map$long,y=map$lat) + 
   theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
-  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(countries_only$counts)/2),limits=c(0,max(countries_only$counts)))
+  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(ctry$n)/2),limits=c(1,max(ctry$n)))
 dev.off()
 
 ########
 ## Trying with chord diagram instead
-library(circlize)
-library(reshape)
 
 ###########################
 ##FOR MPAS
 ###########################
+mpa_outcomes <- filter(data,Int_type == "MPA") %>% distinct()
 syn <- filter(mpa_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
 tradeoff <- filter(mpa_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-both <- filter(mpa_outcomes,STE_domain == "Both") %>% arrange(Out_type,aid)
+both <- filter(mpa_outcomes,STE_domain == "Both Syn/Trd") %>% arrange(Out_type,aid)
 
 #Create input for tradeoffs
 aid <- as.list(unique(tradeoff$aid))
@@ -351,7 +393,7 @@ colnames(counts3) <- c("source","target","value")
 counts3 <- as.data.frame(counts3)
 
 grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
-pdf(file="STE by Domain - MPA_4_24.pdf",width=11,height=8.5)
+pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
 chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col)
 title("Tradeoffs (n=16 articles, x=46 cases)",line=-3.5)
@@ -365,9 +407,10 @@ dev.off()
 ###########################
 ##for CBNRM
 ###########################
+cbnrm_outcomes <- filter(data,Int_type %in% c("CBRNM_MPA","CBNRM")) %>% distinct()
 syn <- filter(cbnrm_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
 tradeoff <- filter(cbnrm_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-both <- filter(cbnrm_outcomes,STE_domain == "Both")
+both <- filter(cbnrm_outcomes,STE_domain == "Both Syn/Trd")
 
 #Create input for tradeoffs
 aid <- as.list(unique(tradeoff$aid))
@@ -447,7 +490,7 @@ colnames(counts3) <- c("source","target","value")
 counts3 <- as.data.frame(counts3)
 
 grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
-pdf(file="STE by Domain - CBNRM_4_24.pdf",width=11,height=8.5)
+pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
 chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col)
 title("Tradeoffs (n=8 articles, x=18 cases)",line=-3.5)
@@ -460,7 +503,20 @@ dev.off()
 
 ##########
 #Treemapping to look at outcome subtypes within outcome domains
-pdf(file="Outcome_attr_by_domain_MPA.pdf")
+outcomes <- select(data,aid,oid,Int_type,Out_type,Out_subtype)
+foo <- data.frame(do.call('rbind', strsplit(as.character(outcomes$Out_subtype),', ',fixed=TRUE)))
+outcomes <- bind_cols(outcomes,foo)
+outcomes <- select(outcomes,-Out_subtype)
+outcomes2 <- gather(outcomes,"X","Out_subtype",5:8)
+outcomes2 <- select(outcomes2,-X) %>% distinct()
+mpa_out <- filter(outcomes2,Int_type == "MPA") %>% select(oid,Out_type,Out_subtype)
+cbnrm_out <- filter(outcomes2,Int_type == "CBNRM")
+cbnrm_mpa_out <- filter(outcomes2,Int_type == "CBNRM_MPA")
+mpa_count <- count(mpa_out,Out_type,Out_subtype)
+cbnrm_count <- count(cbnrm_out,Out_type,Out_subtype)
+cbnrm_mpa_count <- count(cbnrm_mpa_out,Out_type,Out_subtype)
+
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
 treemap(mpa_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
@@ -476,7 +532,7 @@ treemap(mpa_count,index=c("Out_type","Out_subtype"),
         inflate.labels=F,
         title="MPAs")
 dev.off()
-pdf(file="Outcome_attr_by_domain_CBNRM.pdf")
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM.pdf"))
 treemap(cbnrm_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
@@ -491,6 +547,23 @@ treemap(cbnrm_count,index=c("Out_type","Out_subtype"),
         overlap.labels=0.5,
         inflate.labels=F,
         title="CBNRM")
+dev.off()
+
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
+treemap(cbnrm_mpa_count,index=c("Out_type","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="CBNRM_MPA")
 dev.off()
 
 # ###########################################################
