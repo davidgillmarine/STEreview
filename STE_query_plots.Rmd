@@ -6,14 +6,14 @@ output: html_document
 ---
 ##Setup
 load packages, set file directories
-```{r eval=T}
+```{r}
 library(tidyr)
 library(gplots)
 library(RColorBrewer)
-library(ggplot2)
 library(viridis)
 library(extrafont)
 library(ggthemes)
+library(ggplot2)
 library(d3Network)
 library(treemap)
 library(maptools)
@@ -31,16 +31,17 @@ datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 
+```
+
+### Read in and prep data
+```{r eval=T}
 ext.table <- import(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
 # paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
 # if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
 #   View(ext.table[ext.table$`05 Exclude`!=ext.table$`40 Exclude`,])
 #   ext.table <- ext.table[ext.table$`05 Exclude`==ext.table$`40 Exclude`,]
-# }```
-```
+# }
 
-### Read in and prep data
-```{r eval=T}
 names(ext.table) <- gsub(" ","_",names(ext.table))
 ext.data <- ext.table %>% 
   rename(aid='Data_extraction_questionnaire.01_Article_ID',
@@ -143,8 +144,182 @@ data <- ext.data %>%
          Mang_auth.Private_governance=ifelse(grepl("private",int_auth,ignore.case = T),1,0),
          Mang_auth.Indigenous_community_governance=ifelse(grepl("Indigenous",int_auth,ignore.case = T),1,0),
          Mang_auth.multiple=ifelse(grepl("multiple",int_auth),1,0),  
-         Mang_auth.mixed=ifelse(grepl("mixed",int_auth,ignore.case = T),1,0)) %>% 
+         Mang_auth.mixed=ifelse(grepl("mixed",int_auth,ignore.case = T),1,0),
+         Comp_type.dist=ifelse(grepl("Distance",Comp_type),1,0),
+         Comp_type.treat=ifelse(grepl("Treated/Untreated",Comp_type),1,0),
+         Comp_type.prepost=ifelse(grepl("Pre/post",Comp_type),1,0),
+         Comp_type.BACI=ifelse(grepl("BACI",Comp_type),1,0),
+         Comp_type.BACI=ifelse(grepl("BACI",Comp_type),1,0)         
+) %>% 
         filter(exclude==FALSE)
+```
+### Basic plot functions (for next chunk of plots)
+```{r eval=T}
+# article level stats
+ste_gp <- function (x,y) {
+  data %>% 
+    group_by_(x,y) %>% 
+    summarise(num=n()) %>%
+    arrange(-num) %>%
+    ggplot(aes_q(y))+
+    geom_bar(stat='count') +
+    coord_flip() +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+}
+# outcome level stats
+ste_gp_o <- function (z) {
+ data %>% 
+  filter(!is.na(z)) %>%
+  group_by_(z) %>% 
+  summarise(num=n()) %>%
+  arrange(-num) }
+ste_hist <- function () {
+  list(
+    geom_histogram(stat='identity'),
+    coord_flip(),
+    theme_bw(),
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  )
+}
+
+```
+
+### Intervention and study plots
+```{r eval=T}
+#Percent excluded
+pExclude <- ext.table %>% 
+    rename(aid='Data_extraction_questionnaire.01_Article_ID',
+         exclude='05_Exclude') %>% 
+    group_by(aid,exclude) %>% 
+    summarise(num=n()) %>% 
+  ggplot(aes(exclude)) +
+    geom_histogram(stat='count') +
+    coord_flip() +
+    xlab("Excluded articles") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Publication year
+table(data$Pub_year)
+minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
+pPubyr<- data %>% 
+    group_by(aid,Pub_year) %>% 
+    summarise() %>% 
+    ggplot(aes(Pub_year))+
+    geom_histogram(stat='count') +
+    scale_x_continuous("Publication year", breaks=seq(minyr,maxyr,5)) +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Publication type
+pPubtype<-ste_gp(~aid,~Pub_type) +
+  xlab("Publication type")
+
+# Author affliation
+table(data$auth_aff)
+pAuth_aff<-ste_gp(~aid,~auth_aff) +
+  xlab("Author affliation")
+
+# Intervention type
+table(data$Int_type)/nrow(data)
+pInt_typ<-ste_gp(~aid,~Int_type) +
+  xlab("Intervention type")
+
+# Intervention scale
+table(data$int_scale)/nrow(data)
+pInt_scale<-ste_gp(~aid,~int_scale) +
+  xlab("Intervention scale")
+
+# Type of study
+table(data$Study_type)/nrow(data)
+pStudy_typ<-ste_gp(~aid,~Study_type) +
+  xlab("Study type")
+
+# Study data source
+table(data$Data_source)/nrow(data)
+pStdy_source<-ste_gp(~aid,~Data_source) +
+  xlab("Study data source")
+
+# Study scale
+table(data$stdy_scl)/nrow(data)
+pStdy_scl<-ste_gp(~aid,~stdy_scl) +
+  xlab("Study scale")
+
+# Control group
+table(data$Design.control_comp)/nrow(data)
+pCtrl_gp<-ste_gp(~aid,~Design.control_comp) +
+  xlab("Control group")
+
+# Control group type
+table(data$Comp_type)/nrow(filter(data,Design.control_comp==T))
+pCtrl_typ<-ste_gp(~aid,~Comp_type) +
+  xlab("Control group type")
+
+# Biome
+table(data$Biome.)
+pBiome<-ste_gp(~aid,~Biome.) +
+  xlab("Biome")
+
+# Country
+table(data$Study_country)
+pCountry<-ste_gp(~aid,~Study_country) +
+  xlab("Study country")
+
+
+# About study
+plot_grid(pExclude,pPubyr,pPubtype,pAuth_aff,
+          labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+
+# About intervention
+plot_grid(pInt_typ,pInt_scale,pBiome,pCountry
+          ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+
+# About study
+plot_grid(pStudy_typ,pStdy_source,pStdy_scl,pCtrl_gp,pCtrl_typ,
+          labels=letters[1:5], ncol = 3, nrow = 2, hjust=-1)
+```
+
+### Outcome plots
+```{r eval=T}
+# Outcome domain
+pOut_domain <- ste_gp_o('Out_type') %>% 
+ggplot(aes(x=reorder(Out_type,num),y=num))+
+  ste_hist() +
+  xlab('Outcome domain')
+
+# Data type
+table(data$Outcome.data_type)/sum(!is.na(data$Outcome.data_type))
+pDatatype <-  ste_gp_o('Outcome.data_type') %>% 
+  ggplot(aes(x=reorder(Outcome.data_type,num),y=num))+
+  ste_hist() +
+  xlab("Outcome data type")
+ 
+# Perceived vs observed
+table(data$Out_definition)
+data$outcome_obs1 <- ifelse(data$Out_definition%in%c('Researcher','Respondent'),
+                                data$Out_definition,"Both")
+table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
+pDataobs <- ste_gp_o('outcome_obs1') %>% 
+  ggplot(aes(x=reorder(outcome_obs1,num),y=num))+
+  ste_hist() +
+  xlab("Data 'observer'")
+
+# Dimensions
+ste.data <- data %>% 
+  select(STE_domain:STE_temporal_scale)
+
+ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
+names(ste.data1)[1] <- "total"
+ste.data1$var <- gsub('STE_','',row.names(ste.data1))
+
+pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
+    ste_hist() +
+    xlab("STE dimension") 
+
+plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
+          ncol = 2, nrow = 2, hjust=-1)
+
 ```
 
 ### Heat maps
@@ -178,10 +353,9 @@ io_counts <- data %>%
 # io_counts$Out_type <- rownames(io_counts)
 # io_counts <- gather(io_counts,"Int_type","n",1:5)
 
-pdf(file=paste0(datadir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
-ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
+heat.map.all <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   geom_tile(color="gray90",size=0.1) +
-  geom_text(aes(label=n, color="white")) +
+  geom_text(aes(label=n),show.legend = F) +
   scale_fill_gradient(low="#f7fbff",high="#084594",name="# Cases",na.value="gray90") +
   coord_equal() +
   theme_tufte(base_family="Helvetica") +
@@ -194,7 +368,8 @@ ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12))
-dev.off()
+
+heat.map.all
 
 ##BY STE TYPE AND OUTCOME DOMAIN - HEATMAP
 
@@ -236,7 +411,7 @@ matrix2 <- ste_outcomes %>%
 all_poss <- expand.grid(Out_type=unique(matrix2$Out_type),ste_type=unique(matrix2$ste_type),Int_type=unique(matrix2$Int_type))
 all_merge <- merge(matrix2,all_poss,by=c("Out_type","ste_type","Int_type"),all=TRUE) %>% arrange(Int_type)
 
-gg <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) + 
+heat.map.int <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) + 
   geom_tile(color="gray90",size=0.1) +
   geom_text(aes(label=n, color="white")) +
   scale_fill_gradient(low="#f7fbff",high="#084594",name="# Cases",na.value="gray90") +
@@ -261,9 +436,7 @@ gg <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) +
   theme(legend.key.width=unit(1, "cm")) +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=7))
 
-pdf(file=paste0(datadir,"STE_type_Int_Outcome_Heatmap_5_11.pdf"), width=11, height=8.5)
-gg
-dev.off()
+heat.map.int
 ```
 ### Plot world map
 I can't seem to get the fortify function to work on my system with Sam's map. Also prefer to use lines 330-346 for wrangling the data, but can't do much without the map. If it works for others, then this is fine
@@ -392,9 +565,9 @@ for(i in aid){
 links <- slice(links,-1)
 
 ##Count links 
-counts <- count(links,source,target)
-colnames(counts) <- c("source","target","value") 
-counts <- as.data.frame(counts)
+mpa.counts.trdoff <- count(links,source,target)
+colnames(mpa.counts.trdoff) <- c("source","target","value") 
+mpa.counts.trdoff <- as.data.frame(mpa.counts.trdoff)
 
 ##For synergies
 
@@ -418,9 +591,9 @@ for(i in aid2){
 links2 <- slice(links2,-1)
 
 ##Count links 
-counts2 <- count(links2,source,target)
-colnames(counts2) <- c("source","target","value") 
-counts2 <- as.data.frame(counts2)
+mpa.counts.syn <- count(links2,source,target)
+colnames(mpa.counts.syn) <- c("source","target","value") 
+mpa.counts.syn <- as.data.frame(mpa.counts.syn)
 
 #Create input for both
 aid3 <- as.list(unique(both$aid))
@@ -443,21 +616,21 @@ for(i in aid3){
 links3 <- slice(links3,-1)
 
 ##Count links 
-counts3 <- count(links3,source,target)
-colnames(counts3) <- c("source","target","value") 
-counts3 <- as.data.frame(counts3)
+mpa.counts.both <- count(links3,source,target)
+colnames(mpa.counts.both) <- c("source","target","value") 
+mpa.counts.both <- as.data.frame(mpa.counts.both)
 
 grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
-pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
+#pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
-chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col)
+chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) 
 title("Tradeoffs (n=16 articles, x=46 cases)",line=-3.5)
-chordDiagram(as.data.frame(counts3), transparency = 0.3, grid.col=grid.col)
+chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
 title("Both (n=16 articles, x=46 cases)",line=-3.5)
-chordDiagram(as.data.frame(counts2), transparency = 0.3, grid.col=grid.col)
+chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
 title("Synergies (n=26 articles, x=70 cases)",line=-3.5)
 mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
-dev.off()
+#dev.off()
 
 ###########################
 ##for CBNRM
@@ -514,9 +687,9 @@ for(i in aid2){
 links2 <- slice(links2,-1)
 
 ##Count links 
-counts2 <- count(links2,source,target)
-colnames(counts2) <- c("source","target","value") 
-counts2 <- as.data.frame(counts2)
+cbnrm.counts.syn <- count(links2,source,target)
+colnames(cbnrm.counts.syn) <- c("source","target","value") 
+cbnrm.counts.syn <- as.data.frame(cbnrm.counts.syn)
 
 ##For both
 
@@ -540,23 +713,23 @@ for(i in aid3){
 links3 <- slice(links3,-1)
 
 ##Count links 
-counts3 <- count(links3,source,target)
-colnames(counts3) <- c("source","target","value") 
-counts3 <- as.data.frame(counts3)
+cbnrm.counts.both <- count(links3,source,target)
+colnames(cbnrm.counts.both) <- c("source","target","value") 
+cbnrm.counts.both <- as.data.frame(cbnrm.counts.both)
 
 grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
-pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
+#pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
 # chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
 # title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
-chordDiagram(as.data.frame(counts2), transparency = 0.3, grid.col=grid.col)
+chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
 title("Synergies (n=8 articles, x=21 cases)",line=-3.5)
-chordDiagram(as.data.frame(counts3), transparency = 0.3, grid.col=grid.col)
+chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
 title("Both (n=8 articles, x=21 cases)",line=-3.5)
 mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
-dev.off()
+#dev.off()
 ```
-
+### Treemapping
 ```{r eval=T}
 #Treemapping to look at outcome subtypes within outcome domains
 outcomes <- select(data,aid,oid,Int_type,Out_type,Out_subtype)
@@ -570,12 +743,12 @@ outcomes2 <- outcomes %>%
 mpa_out <- filter(outcomes2,Int_type == "MPA") %>% select(oid,Out_type,Out_subtype)
 cbnrm_out <- filter(outcomes2,Int_type == "CBNRM")
 cbnrm_mpa_out <- filter(outcomes2,Int_type == "CBNRM_MPA")
-mpa_count <- count(mpa_out,Out_type,Out_subtype)
-cbnrm_count <- count(cbnrm_out,Out_type,Out_subtype)
-cbnrm_mpa_count <- count(cbnrm_mpa_out,Out_type,Out_subtype)
+mpa_tree_count <- count(mpa_out,Out_type,Out_subtype)
+cbnrm_tree_count <- count(cbnrm_out,Out_type,Out_subtype)
+cbnrm_mpa_tree_count <- count(cbnrm_mpa_out,Out_type,Out_subtype)
 
-pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
-treemap(mpa_count,index=c("Out_type","Out_subtype"),
+#pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
+treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -589,9 +762,9 @@ treemap(mpa_count,index=c("Out_type","Out_subtype"),
         overlap.labels=0.5,
         inflate.labels=F,
         title="MPAs")
-dev.off()
-pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM.pdf"))
-treemap(cbnrm_count,index=c("Out_type","Out_subtype"),
+# dev.off()
+# pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM.pdf"))
+treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -605,10 +778,10 @@ treemap(cbnrm_count,index=c("Out_type","Out_subtype"),
         overlap.labels=0.5,
         inflate.labels=F,
         title="CBNRM")
-dev.off()
+# dev.off()
 
-pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
-treemap(cbnrm_mpa_count,index=c("Out_type","Out_subtype"),
+# pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
+treemap(cbnrm_mpa_tree_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -622,19 +795,15 @@ treemap(cbnrm_mpa_count,index=c("Out_type","Out_subtype"),
         overlap.labels=0.5,
         inflate.labels=F,
         title="CBNRM_MPA")
-dev.off()
-
+#dev.off()
 ```
 
-
 ### Values over time
-
 Still need to figure out other graphs over time:
 
-* rate of change
-* rate by intervention (line 661)
-* make prettier
-```{r eval=F}
+* rate of change?
+* make prettier (re-order by value)
+```{r eval=T}
 demographic_ste <- c("STE_age", "STE_econ","STE_ethnic","STE_occupation","STE_sex","STE_social")
 spat_temp_ste <- c("STE_spatial","STE_temporal_unit","STE_temporal_scale")
 pub_per_yr <-data %>%
@@ -655,8 +824,7 @@ STE_time <-  data %>%
   ungroup() %>% 
   arrange(Pub_year) %>% 
   mutate_at(vars(pub_per_yr:STE_temporal_unit),funs(cumsum(.))) 
-head(STE_time)
-sum(STE_time$STE_demogr);sum(STE_time$STE_spatial_temp)
+tail(STE_time)
 
 # # By intervention
 # pub_per_yr_int <-data %>%
@@ -724,12 +892,10 @@ pSTE_spatial_temp <- ggplot(STE_time,aes(x = Pub_year, y=STE_spatial_temp)) +
     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1990,2020,5)) +
     ggtitle('Spatio-temporal')+ylim(c(0,60))+geom_line(aes(y = STE_spatial_temp))
 
-
 plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
           pSTE_ethnic,pSTE_age,pSTE_occupation,
           pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
-ggsave(paste0(datadir,'STE over time.jpg'),width = 13,height = 7)
 
 STE_time_gps <- STE_time %>%
   select(Pub_year,pub_per_yr,STE_domain,STE_demogr,STE_spatial_temp) %>%
@@ -741,9 +907,70 @@ pSTE_time_gps <- ggplot(STE_time_gps)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   ggtitle('Groups')+ylim(c(0,100)) 
  # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
- ggsave(paste0(datadir,'STE main gps.jpg'),width = 13,height = 7)
 
  
+# Growth by intervention
+Int_time_gps <-  data %>%
+  group_by(Pub_year,Int_type) %>% 
+  summarise(int_per_yr= n_distinct(aid)) %>% 
+  spread(Int_type,value = int_per_yr) %>% 
+  mutate_at(vars(CBNRM:MPA),funs(replace(., is.na(.), 0))) %>% 
+  ungroup() %>% 
+  arrange(Pub_year) %>% 
+  mutate_at(vars(CBNRM:MPA),funs(cumsum(.))) %>% 
+  gather("int_typ","val",CBNRM:MPA) 
+tail(Int_time_gps)
+pInt_time_gps <- ggplot(Int_time_gps)  + 
+  geom_line(aes(x = Pub_year, y = val, group = int_typ, colour = int_typ))  +
+  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ggtitle('Intervention type')+ylim(c(0,60)) 
+ # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
+
+# Growth by STE (demographic group)
+STE_time_demog <- STE_time %>%
+  select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_sex,STE_social) %>%
+  gather("STE_gp","val",STE_age:STE_social) %>% 
+  mutate(STE_gp=gsub("STE_","",STE_gp))
+pSTE_time_demog <-  ggplot(STE_time_demog)  + 
+  geom_line(aes(x = Pub_year, y = val, group = STE_gp, colour = STE_gp))  +
+  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ggtitle('Demographic groups')+ylim(c(0,60)) 
+ # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
+
+# Growth by domain
+STE_time_dom <-  data %>%
+  filter(!is.na(STE_domain)) %>% 
+  group_by(Pub_year,Out_type) %>% 
+  summarise(dom_per_yr= n_distinct(aid))   %>%
+  spread(Out_type,value = dom_per_yr) %>% 
+  mutate_at(vars(Culture:`Social capital`),funs(replace(., is.na(.), 0))) %>% 
+  ungroup() %>% 
+  arrange(Pub_year) %>% 
+  mutate_at(vars(Culture:`Social capital`),funs(cumsum(.))) %>% 
+  gather("out_typ","val",Culture:`Social capital`) 
+tail(STE_time_dom)
+pSTE_time_dom <- ggplot(STE_time_dom)  + 
+  geom_line(aes(x = Pub_year, y = val, group = out_typ, colour = out_typ))  +
+  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ggtitle('Domain')+ylim(c(0,60)) 
+ # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
+
+# Growth by scale
+STE_scale_gps <- STE_time %>%
+  select(Pub_year,STE_spatial,STE_temporal_scale,STE_temporal_unit) %>%
+  gather("STE_gp","val",STE_spatial:STE_temporal_unit) %>% 
+  mutate(STE_gp=gsub("STE_","",STE_gp))
+pSTE_scale_gps <- ggplot(STE_scale_gps)  + 
+  geom_line(aes(x = Pub_year, y = val, group = STE_gp, colour = STE_gp))  +
+  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ggtitle('Scale')+ylim(c(0,60)) 
+ # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
+
+plot_grid(pInt_time_gps, pSTE_time_demog,pSTE_time_dom,pSTE_scale_gps,
+          labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+
+
+
 # STE_time_percent <-ext.data %>%
 #   filter(exclude=='FALSE') %>% 
 #   select(aid,Pub_year,STE_domain:STE_temporal_scale) %>%  # replace to your needs
@@ -894,178 +1121,143 @@ pStudy_typ_time <- data %>%
 
 plot_grid(pInt_time+theme(legend.position="right"), pStudy_typ_time+theme(legend.position="right"),
           labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
-ggsave(paste0(datadir,'study over time.jpg'),width = 10.5,height = 6)
-```
-### Basic plot functions (for next chunk of plots)
-```{r eval=F}
-# article level stats
-ste_gp <- function (x,y) {
-  data %>% 
-    group_by_(x,y) %>% 
-    summarise(num=n()) %>%
-    arrange(-num) %>%
-    ggplot(aes_q(y))+
-    geom_bar(stat='count') +
-    coord_flip() +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-}
-# outcome level stats
-ste_gp_o <- function (z) {
- data %>% 
-  filter(!is.na(z)) %>%
-  group_by_(z) %>% 
-  summarise(num=n()) %>%
-  arrange(-num) }
-ste_hist <- function () {
-  list(
-    geom_histogram(stat='identity'),
-    coord_flip(),
-    theme_bw(),
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-  )
-}
-
 ```
 
-### Intervention and study plots
-```{r eval=F}
-#Percent excluded
-pExclude <- ext.table %>% 
-    rename(aid='Data_extraction_questionnaire.01_Article_ID',
-         exclude='05_Exclude') %>% 
-    group_by(aid,exclude) %>% 
-    summarise(num=n()) %>% 
-  ggplot(aes(exclude)) +
-    geom_histogram(stat='count') +
-    coord_flip() +
-    xlab("Excluded articles") +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-# Publication year
-table(data$Pub_year)
-minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
-pPubyr<- data %>% 
-    group_by(aid,Pub_year) %>% 
-    summarise() %>% 
-    ggplot(aes(Pub_year))+
-    geom_histogram(stat='count') +
-    scale_x_continuous("Publication year", breaks=seq(minyr,maxyr,5)) +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-# Publication type
-pPubtype<-ste_gp(~aid,~Pub_type) +
-  xlab("Publication type")
-
-# Author affliation
-table(data$auth_aff)
-pAuth_aff<-ste_gp(~aid,~auth_aff) +
-  xlab("Author affliation")
-
-# Intervention type
-table(data$Int_type)
-pInt_typ<-ste_gp(~aid,~Int_type) +
-  xlab("Intervention type")
-
-# Intervention scale
-table(data$int_scale)
-pInt_scale<-ste_gp(~aid,~int_scale) +
-  xlab("Intervention scale")
-
-# Type of study
-table(data$Study_type)
-pStudy_typ<-ste_gp(~aid,~Study_type) +
-  xlab("Study type")
-
-# Study data source
-table(data$Data_source)
-pStdy_source<-ste_gp(~aid,~Data_source) +
-  xlab("Study data source")
-
-# Study scale
-table(data$stdy_scl)
-pStdy_scl<-ste_gp(~aid,~stdy_scl) +
-  xlab("Study scale")
-
-# Control group
-table(data$Design.control_comp)
-pCtrl_gp<-ste_gp(~aid,~Design.control_comp) +
-  xlab("Control group")
-
-# Control group type
-table(data$Comp_type)
-pCtrl_typ<-ste_gp(~aid,~Comp_type) +
-  xlab("Control group type")
-
-# Biome
-table(data$Biome.)
-pBiome<-ste_gp(~aid,~Biome.) +
-  xlab("Biome")
-
-# Country
-table(data$Study_country)
-pCountry<-ste_gp(~aid,~Study_country) +
-  xlab("Study country")
-
-
-# About study
+### Export plots
+```{r, EVAL =F}
+#-- Intervention & study plots
+## about study
 plot_grid(pExclude,pPubyr,pPubtype,pAuth_aff,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE pub info.jpg'),width = 10.5,height = 6)
-
-# About intervention
+## about intervention
 plot_grid(pInt_typ,pInt_scale,pBiome,pCountry
           ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE intervention info.jpg'),width = 14,height = 9)
-
-# About study
+## about study
 plot_grid(pStudy_typ,pStdy_source,pStdy_scl,pCtrl_gp,pCtrl_typ,
           labels=letters[1:5], ncol = 3, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE study info.jpg'),width = 10.5,height = 6)
-
-```
-
-### Outcome plots
-```{r eval=F}
-# Outcome domain
-pOut_domain <- ste_gp_o('Out_type') %>% 
-ggplot(aes(x=reorder(Out_type,num),y=num))+
-  ste_hist() +
-  xlab('Outcome domain')
-
-# Data type
-pDatatype <-  ste_gp_o('Outcome.data_type') %>% 
-  ggplot(aes(x=reorder(Outcome.data_type,num),y=num))+
-  ste_hist() +
-  xlab("Outcome data type")
- 
-# Perceived vs observed
-table(data$Out_definition)
-data$outcome_obs1 <- ifelse(data$Out_definition%in%c('Researcher','Respondent'),
-                                data$Out_definition,"Both")
-table(data$outcome_obs1)
-pDataobs <- ste_gp_o('outcome_obs1') %>% 
-  ggplot(aes(x=reorder(outcome_obs1,num),y=num))+
-  ste_hist() +
-  xlab("Data 'observer'")
-
-# Dimensions
-ste.data <- data %>% 
-  select(STE_domain:STE_temporal_scale)
-
-ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
-names(ste.data1)[1] <- "total"
-ste.data1$var <- gsub('STE_','',row.names(ste.data1))
-
-pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
-    ste_hist() +
-    xlab("STE dimension") 
-
+## outcomes
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(datadir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 
-```
+#-- World map
+pdf(file=paste0(datadir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+ggplot() +
+  geom_map(data=countries_only, aes(map_id=Code, fill=counts),map=map) +
+  geom_map(data=countries_zero, aes(map_id=Code),fill="#f0f0f0",map=map) +
+  expand_limits(x=map$long,y=map$lat) +
+  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(countries_only$counts)/2),limits=c(0,max(countries_only$counts)))
+dev.off()
 
+#-- Heat maps
+## all outcomes combined
+pdf(file=paste0(datadir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
+heat.map.all
+dev.off()
+## all outcomes by intervention
+pdf(file=paste0(datadir,"STE_type_Int_Outcome_Heatmap_5_11.pdf"), width=11, height=8.5)
+heat.map.int
+dev.off()
+
+#-- Chord diagrams
+## MPA
+pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
+par(mfrow=c(1,2),oma=c(0,0,2,0))
+chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col)
+title("Tradeoffs (n=16 articles, x=46 cases)",line=-3.5)
+chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
+title("Both (n=16 articles, x=46 cases)",line=-3.5)
+chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
+title("Synergies (n=26 articles, x=70 cases)",line=-3.5)
+mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
+dev.off()
+## CBRNRM
+pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
+par(mfrow=c(1,2),oma=c(0,0,2,0))
+# chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
+# title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
+chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
+title("Synergies (n=8 articles, x=21 cases)",line=-3.5)
+chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
+title("Both (n=8 articles, x=21 cases)",line=-3.5)
+mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
+dev.off()
+
+#-- Tree maps
+## MPA
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
+treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="MPAs")
+dev.off()
+
+## CBNRM
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM.pdf"))
+treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="CBNRM")
+dev.off()
+## CBNRM_MPA
+pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
+treemap(cbnrm_mpa_tree_count,index=c("Out_type","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="CBNRM_MPA")
+dev.off()
+
+# STE over time
+plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
+          pSTE_ethnic,pSTE_age,pSTE_occupation,
+          pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
+          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+ggsave(paste0(datadir,'STE over time.jpg'),width = 13,height = 7)
+
+# study over time
+plot_grid(pInt_time+theme(legend.position="right"), pStudy_typ_time+theme(legend.position="right"),
+          labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
+ggsave(paste0(datadir,'study over time.jpg'),width = 10.5,height = 6)
+
+# main groups over time
+plot_grid(pInt_time_gps, pSTE_time_demog,pSTE_time_dom,pSTE_scale_gps,
+          labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+
+ggsave(paste0(datadir,'growth_over_time.jpg'),width = 13,height = 7)
+
+
+```
