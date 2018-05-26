@@ -7,6 +7,7 @@ output: html_document
 ##Setup
 load packages, set file directories
 ```{r}
+extrafont::loadfonts(device="win")
 library(tidyr)
 library(gplots)
 library(RColorBrewer)
@@ -178,7 +179,7 @@ data <- ext.data %>%
     arrange(-num) %>% 
     mutate(x.labels=ordered(UQ(enquo_z))) %>% 
     ggplot(aes(x=reorder(x.labels,num),y=num))+
-    geom_bar(stat='identity') +
+    geom_bar(stat='identity', fill='blue') +
     coord_flip()}
 
 # outcome level stats
@@ -190,7 +191,7 @@ ste_gp_o <- function (z) {
   arrange(-num) }
 ste_hist <- function () {
   list(
-    geom_histogram(stat='identity'),
+    geom_histogram(stat='identity', fill='blue'),
     coord_flip(),
     theme_bw(),
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
@@ -238,7 +239,7 @@ data %>% group_by(auth_aff) %>% summarise(n_distinct(aid))
   xlab("Author affliation"))
 
 # Intervention type
-data %>% group_by(Int_type) %>% summarise(n_distinct(aid))
+data %>% group_by(Int_type) %>%summarise(num=n_distinct(aid), pct=num/75)
 (pInt_typ<-ste_gp(Int_type) +
   xlab("Intervention type"))
 
@@ -253,7 +254,7 @@ data %>% group_by(Study_type) %>% summarise(num=n_distinct(aid), pct=num/75)
   xlab("Study type"))
 
 # Study data source
-data %>% group_by(Data_source) %>% summarise(n_distinct(aid))
+data %>% group_by(Data_source) %>% summarise(num=n_distinct(aid), pct=num/75)
 (pStdy_source<-ste_gp(Data_source) +
   xlab("Study data source"))
 
@@ -336,19 +337,38 @@ ste.data1$var <- gsub('STE_','',row.names(ste.data1))
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 
+
+         
+# Demographic groups
+(pSTE_demo_time <-  data %>%
+  select(aid,Pub_year,STE_econ:STE_occupation) %>% 
+  gather("STE_type","val",STE_econ:STE_occupation) %>% 
+  filter(!is.na(val)) %>% 
+  group_by(Pub_year,STE_type) %>% 
+  summarise(ste_per_yr= n_distinct(aid))  %>% 
+  mutate(STE_type=gsub("STE_","",STE_type)) %>% 
+  ggplot(aes(x=Pub_year,y=ste_per_yr)) +
+  geom_bar(aes(fill = STE_type),stat = 'identity') +
+  scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
+  scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
+
+# Scale groups
+(pSTE_scale_time <-  data %>%
+  select(aid,Pub_year,STE_spatial:STE_temporal_scale) %>% 
+  gather("STE_type","val",STE_spatial:STE_temporal_scale) %>% 
+  filter(!is.na(val)) %>% 
+  group_by(Pub_year,STE_type) %>% 
+  summarise(ste_per_yr= n_distinct(aid))  %>% 
+  mutate(STE_type=gsub("STE_","",STE_type)) %>% 
+  ggplot(aes(x=Pub_year,y=ste_per_yr)) +
+  geom_bar(aes(fill = STE_type),stat = 'identity') +
+  scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
+  scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
+
 ```
 
 ### Heat maps
 ```{r eval=T}
-io_counts <- data %>% 
-        filter(exclude==FALSE) %>% 
-        group_by(Int_type,Out_type) %>% 
-        count() %>% 
-        spread(key=Int_type, value=n) %>% 
-        mutate(PES=0) %>%
-        gather("Int_type","n",CBNRM:PES) %>% 
-        mutate(n=ifelse(is.na(n),0,as.integer(n)))
-
 # out_type <- c("Economic well-being","Health","Political empowerment","Social capital","Education","Culture")
 # int_type <- c("MPA","PES","CBNRM","CBNRM_MPA","Certification")
 # 
@@ -369,12 +389,21 @@ io_counts <- data %>%
 # io_counts$Out_type <- rownames(io_counts)
 # io_counts <- gather(io_counts,"Int_type","n",1:5)
 
-heat.map.all <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
+#------ Domains
+io_counts <- data %>% 
+        group_by(Int_type,Out_type) %>% 
+        count() %>% 
+        spread(key=Int_type, value=n) %>% 
+        mutate(PES=0) %>%
+        gather("Int_type","n",CBNRM:PES) %>% 
+        mutate(n=ifelse(is.na(n),0,as.integer(n)))
+
+(heat.map.domain <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   geom_tile(color="gray90",size=0.1) +
   geom_text(aes(label=n),show.legend = F) +
-  scale_fill_gradient(low="#f7fbff",high="#084594",name="# Cases",na.value="gray90") +
+  scale_fill_gradient(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90") +
   coord_equal() +
-  theme_tufte(base_family="Helvetica") +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
   theme(axis.ticks=element_line(size=0.4)) +
   theme(axis.text=element_text(size=12)) +
   theme(legend.title=element_text(size=10)) +
@@ -383,9 +412,74 @@ heat.map.all <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   theme(legend.position="bottom") +
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
-  theme(axis.text.x = element_text(angle=45,hjust=1,size=12))
+  xlab("Domain") +
+  ylab("Intervention") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
-heat.map.all
+#------ Demographic groups
+head(id_counts)
+id_counts <- data %>% 
+  select(aid,Int_type,STE_econ:STE_occupation) %>%
+  mutate_at(vars(STE_econ:STE_occupation),funs(ifelse(is.na(.),0,1))) %>%
+  group_by(aid,Int_type) %>% 
+  summarise_all(funs(max)) %>% 
+  ungroup() %>% 
+  select(-aid) %>% 
+  group_by(Int_type) %>% 
+  summarise_all(funs(sum)) %>% 
+  gather("ste_type","n",STE_econ:STE_occupation) %>% 
+  mutate(ste_type=gsub("STE_","",ste_type))
+
+(heat.map.demog <- ggplot(id_counts, aes(x=ste_type,y=Int_type,fill=n)) +
+  geom_tile(color="gray90",size=0.1) +
+  geom_text(aes(label=n),show.legend = F) +
+  scale_fill_gradient(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90") +
+  coord_equal() +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+  theme(axis.ticks=element_line(size=0.4)) +
+  theme(axis.text=element_text(size=12)) +
+  theme(legend.title=element_text(size=10)) +
+  theme(legend.text=element_text(size=10)) +
+  theme(legend.title.align=1) +
+  theme(legend.position="bottom") +
+  theme(legend.key.size=unit(1, "cm")) +
+  theme(legend.key.width=unit(1, "cm")) +
+  scale_x_discrete(name="Demographic group", labels=c("age","econ. gp","ethnicity","occupation","sex", "social gp")) +
+  ylab("Intervention") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+#------ Scales
+head(is_counts)
+is_counts <- data %>% 
+  select(aid,Int_type,STE_spatial:STE_temporal_scale) %>%
+  mutate_at(vars(STE_spatial:STE_temporal_scale),funs(ifelse(is.na(.),0,1))) %>%
+  group_by(aid,Int_type) %>% 
+  summarise_all(funs(max)) %>% 
+  ungroup() %>% 
+  select(-aid) %>% 
+  group_by(Int_type) %>% 
+  summarise_all(funs(sum)) %>% 
+  gather("ste_type","n",STE_spatial:STE_temporal_scale) %>% 
+  mutate(ste_type=gsub("STE_","",ste_type))
+
+(heat.map.scale <- ggplot(is_counts, aes(x=ste_type,y=Int_type,fill=n)) +
+  geom_tile(color="gray90",size=0.1) +
+  geom_text(aes(label=n),show.legend = F) +
+  scale_fill_gradient(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90") +
+  coord_equal() +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+  theme(axis.ticks=element_line(size=0.4)) +
+  theme(axis.text=element_text(size=12)) +
+  theme(legend.title=element_text(size=10)) +
+  theme(legend.text=element_text(size=10)) +
+  theme(legend.title.align=1) +
+  theme(legend.position="bottom") +
+  theme(legend.key.size=unit(1, "cm")) +
+  theme(legend.key.width=unit(1, "cm")) +
+  scale_x_discrete(name="Scale", labels=c("spatial units","temporal scale","temporal units")) +
+  ylab("Intervention") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
 
 ##BY STE TYPE AND OUTCOME DOMAIN - HEATMAP
 
@@ -457,6 +551,40 @@ heat.map.int
 ### Plot world map
 I can't seem to get the fortify function to work on my system with Sam's map so using broom::tidy.Need to verify
 ```{r eval=T}
+# Summarise data by country 
+ctry <- data %>%
+  mutate(Study_country=gsub(",",";",Study_country),
+         Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
+         Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
+  group_by(aid,Study_country) %>%
+  summarise()
+ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
+names(ctry) <- 'ctry'
+ctry_sum <-ctry %>% 
+  mutate(ctry=as.character(ctry)) %>% 
+  group_by(ctry) %>% 
+  add_count()  
+head(ctry_sum)
+
+#load in full country list
+country <- import(paste0(datadir,"allcountries.csv")) %>% 
+  left_join(ctry_sum,by=c("Country"="ctry")) %>%
+  mutate(n=replace(n, is.na(n), 0)) 
+
+ctry_sum$ctry[!ctry_sum$ctry%in%country$Country] # any missing?
+
+# read in map
+map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+map <-broom::tidy(map,region="ISO3")
+#map@data[map@data$NAME=="Turks and Caicos Islands",]
+#plot
+(study_map <- ggplot() +
+  geom_map(data=country, aes(map_id=code, fill=n),map=map) +
+  expand_limits(x=map$long,y=map$lat) +
+  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="white",mid="#6baed6",high="#08519c",
+                       midpoint=(max(country$n)/2),limits=c(0,max(country$n))))
+
 #load in full country list
 # country <- read.csv(paste0(datadir,"allcountries.csv"), head=TRUE, sep=",")
 # names(country) <- c("Study_country", "Region", "Code", "Subregion")
@@ -517,69 +645,28 @@ I can't seem to get the fortify function to work on my system with Sam's map so 
 # # head(map)
 # # map <- fortify(map, region="ISO3")
 # # 
-# # 
-
-
-test <- strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)
-do.call(rbind, test)
-head(test)
-
-# Summarise data by country (ignore warnings)
-ctry <- data %>%
-  mutate(Study_country=gsub(",",";",Study_country),
-         Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
-         Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
-  group_by(aid,Study_country) %>%
-  summarise()
-ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
-names(ctry) <- 'ctry'
-ctry_sum <-ctry %>% 
-  mutate(ctry=as.character(ctry)) %>% 
-  group_by(ctry) %>% 
-  add_count()  
-head(ctry_sum)
-
-#load in full country list
-country <- import(paste0(datadir,"allcountries.csv")) %>% 
-  left_join(ctry_sum,by=c("Country"="ctry")) %>%
-  mutate(n=replace(n, is.na(n), 0)) 
-
-ctry_sum$ctry[!ctry_sum$ctry%in%country$Country]
-# read in map
-map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
-map <-broom::tidy(map,region="ISO3")
-#map@data[map@data$NAME=="Turks and Caicos Islands",]
-#plot
-(study_map <- ggplot() +
-  geom_map(data=country, aes(map_id=code, fill=n),map=map) +
-  expand_limits(x=map$long,y=map$lat) +
-  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-  scale_fill_gradient2(low="#f7fbff",mid="#6baed6",high="#08306b",midpoint=(max(country$n)/2),limits=c(0,max(country$n))))
-
 ```
 ### Chord diagram
 No tradeoffs for CBNRM
+Minor error where some combinations are separated as 2 different chords (e.g.CBNRM-both: Social and Political:1, Political and Social: 2) 
 ```{r eval=T}
-## Trying with chord diagram instead
-
 ###########################
 ##FOR MPAS
 ###########################
 mpa_outcomes <- filter(data,Int_type == "MPA") %>% distinct()
-syn <- filter(mpa_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
-tradeoff <- filter(mpa_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-both <- filter(mpa_outcomes,STE_domain == "Both Syn/Trd") %>% arrange(Out_type,aid)
+mpa.syn <- filter(mpa_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
+mpa.tradeoff <- filter(mpa_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
+mpa.both <- filter(mpa_outcomes,STE_domain == "Both Syn/Trd") %>% arrange(Out_type,aid)
 
 #Create input for tradeoffs
-aid <- as.list(unique(tradeoff$aid))
-
+aid <- as.list(unique(mpa.tradeoff$aid))
 # links <- matrix(nrow=1,ncol=3)
 # colnames(links) <- c("source","target","aid")
 # links <- as.data.frame(links)
 links <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid){
-  sub <- filter(tradeoff, aid == i)
+  sub <- filter(mpa.tradeoff, aid == i)
   if(nrow(sub) > 1){
     sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub2) <- c("source","target")
@@ -597,15 +684,11 @@ colnames(mpa.counts.trdoff) <- c("source","target","value")
 mpa.counts.trdoff <- as.data.frame(mpa.counts.trdoff)
 
 ##For synergies
-
-aid2 <- as.list(unique(syn$aid))
-
-links2 <- matrix(nrow=1,ncol=3)
-colnames(links2) <- c("source","target","aid")
-links2 <- as.data.frame(links2)
+aid2 <- as.list(unique(mpa.syn$aid))
+links2 <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid2){
-  sub <- filter(syn, aid == i)
+  sub <- filter(mpa.syn, aid == i)
   if(nrow(sub) > 1){
     sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub2) <- c("source","target")
@@ -623,14 +706,11 @@ colnames(mpa.counts.syn) <- c("source","target","value")
 mpa.counts.syn <- as.data.frame(mpa.counts.syn)
 
 #Create input for both
-aid3 <- as.list(unique(both$aid))
-
-links3 <- matrix(nrow=1,ncol=3)
-colnames(links3) <- c("source","target","aid")
-links3 <- as.data.frame(links3)
+aid3 <- as.list(unique(mpa.both$aid))
+links3 <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid3){
-  sub <- filter(both, aid == i)
+  sub <- filter(mpa.both, aid == i)
   if(nrow(sub) > 1){
     sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub2) <- c("source","target")
@@ -651,31 +731,28 @@ grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Cultu
 #pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
 chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col) 
-title("Tradeoffs (n=16 articles, x=46 cases)",line=-3.5)
+title(paste0("Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"),line=-3.5)
 chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
-title("Both (n=16 articles, x=46 cases)",line=-3.5)
+title(paste0("Both (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"),line=-3.5)
 chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
-title("Synergies (n=26 articles, x=70 cases)",line=-3.5)
+title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"),line=-3.5)
 mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
 #dev.off()
 
 ###########################
-##for CBNRM
+## for CBNRM
 ###########################
 cbnrm_outcomes <- filter(data,Int_type %in% c("CBRNM_MPA","CBNRM")) %>% distinct()
-syn <- filter(cbnrm_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
-tradeoff <- filter(cbnrm_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-both <- filter(cbnrm_outcomes,STE_domain == "Both Syn/Trd")
+cbnrm.syn <- filter(cbnrm_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
+cbnrm.tradeoff <- filter(cbnrm_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
+cbnrm.both <- filter(cbnrm_outcomes,STE_domain == "Both Syn/Trd")
 
 #Create input for tradeoffs
-aid <- as.list(unique(tradeoff$aid))
-
-links <- matrix(nrow=1,ncol=3)
-colnames(links) <- c("source","target","aid")
-links <- as.data.frame(links)
+aid <- as.list(unique(cbnrm.tradeoff$aid))
+links <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid){
-  sub <- filter(tradeoff, aid == i)
+  sub <- filter(cbnrm.tradeoff, aid == i)
   if(nrow(sub) > 1){
     sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub2) <- c("source","target")
@@ -694,14 +771,11 @@ counts <- as.data.frame(counts)
 
 ##For synergies
 
-aid2 <- as.list(unique(syn$aid))
-
-links2 <- matrix(nrow=1,ncol=3)
-colnames(links2) <- c("source","target","aid")
-links2 <- as.data.frame(links2)
+aid2 <- as.list(unique(cbnrm.syn$aid))
+links2 <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid2){
-  sub <- filter(syn, aid == i)
+  sub <- filter(cbnrm.syn, aid == i)
   if(nrow(sub) > 1){
     sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub2) <- c("source","target")
@@ -720,14 +794,11 @@ cbnrm.counts.syn <- as.data.frame(cbnrm.counts.syn)
 
 ##For both
 
-aid3 <- as.list(unique(syn$aid))
-
-links3 <- matrix(nrow=1,ncol=3)
-colnames(links3) <- c("source","target","aid")
-links3 <- as.data.frame(links3)
+aid3 <- as.list(unique(cbnrm.both$aid))
+links3 <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid3){
-  sub <- filter(syn, aid == i)
+  sub <- filter(cbnrm.both, aid == i)
   if(nrow(sub) > 1){
     sub3 <- as.data.frame(t(combn(sub$Out_type, 2)))
     colnames(sub3) <- c("source","target")
@@ -991,16 +1062,30 @@ STE_scale_gps <- STE_scale_gps %>%
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 
+minyr <- min(data$Pub_year)-1
+maxyr <- max(data$Pub_year)+1
+
+Study_type.lbl <- data %>% 
+  group_by(Study_type) %>% 
+  summarise(num=n_distinct(aid)) %>% 
+  mutate(x.label=paste0(Study_type," (",num,")"))
+
+group.colors <-matrix( c("#02818a","#67a9cf","#084594"),nrow=1)
+names(group.colors) <- Study_type.lbl$x.label
+  
 # Interventions over time
 (pStudy_typ_time <- data %>% 
   group_by(Pub_year,Study_type) %>% 
   summarise(num=n_distinct(aid)) %>%
   arrange(Pub_year) %>% 
   ungroup() %>% 
+  left_join(select(Study_type.lbl,Study_type,x.label),by="Study_type") %>% 
   ggplot(aes(x=Pub_year,y=num)) +
-  geom_bar(aes(fill = Study_type),stat = 'identity') +
-  scale_x_continuous("Study type", breaks=seq(minyr,maxyr,5)) +
-  scale_y_continuous("Frequency", breaks=seq(0,10,2))) 
+  geom_bar(aes(fill = x.label),stat = 'identity') +
+  scale_x_continuous("Publication year", breaks=seq(minyr,maxyr,5)) +
+  scale_y_continuous("Frequency", breaks=seq(0,10,2)) +
+  scale_fill_manual(values=group.colors)) +
+  guides(fill=guide_legend(title=NULL))
 
 ```
 
@@ -1024,24 +1109,30 @@ ggsave(paste0(outputdir,'STE study info.jpg'),width = 10.5,height = 6)
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
-
-
 # Study design
 plot_grid(pDatatype,pDataobs,pStudy_typ, pCtrl_gp,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
-ggsave(paste0(outputdir,'study design.jpg'),width = 10.5,height = 6)
+ggsave(paste0(outputdir,'study design.jpg'),width = 7,height = 5)
 
 #-- World map
-png(file=paste0(outputdir,"STE_Country_Map_dark.png"), width=10.5, height=8, res=600, units = "in")
+png(file=paste0(outputdir,"STE_Country_Map_dark.png"), width=13.5, height=8, res=600, units = "in")
 #pdf(file=paste0(outputdir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
 study_map
 dev.off()
 
 #-- Heat maps
 ## all outcomes combined
-png(file=paste0(outputdir,"Int_Outcome_Heatmap_articles.png"), width=8, height=6, res=600, units = "in")
+png(file=paste0(outputdir,"Int_domain_Heatmap_articles.png"), width=7, height=5, res=600, units = "in")
 # pdf(file=paste0(outputdir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
-heat.map.all
+heat.map.domain
+dev.off()
+png(file=paste0(outputdir,"Int_demographic_Heatmap_articles.png"), width=6, height=4, res=600, units = "in")
+# pdf(file=paste0(outputdir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
+heat.map.demog
+dev.off()
+png(file=paste0(outputdir,"Int_scale_Heatmap_articles.png"), width=5, height=4, res=600, units = "in")
+# pdf(file=paste0(outputdir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
+heat.map.scale
 dev.off()
 ## all outcomes by intervention
 #pdf(file=paste0(outputdir,"STE_type_Int_Outcome_Heatmap_5_11.pdf"), width=11, height=8.5)
@@ -1049,22 +1140,20 @@ png(file=paste0(outputdir,"Int_Outcome_STE_Heatmap_articles.png"), width=8, heig
 heat.map.int
 dev.off()
 
-#-- Chord diagrams
-## MPA
-#pdf(file=paste0(outputdir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
-par(oma=c(0,0,2,0))
-png(file=paste0(outputdir,"STE by Domain-MPA-tradeoffs.png"), width=8, height=6, res=600, units = "in")
-#par(mfrow=c(1,2),oma=c(0,0,2,0))
+#-- Chord diagrams # MPA pdf(file=paste0(outputdir,"STE by Domain -
+#MPA_4_24.pdf"),width=11,height=8.5) par(mfrow=c(1,2),oma=c(0,0,2,0))
+par(oma=c(0,0,2,0), cex=1.5,mfrow=c(1,1))
+png(file=paste0(outputdir,"STE by Domain-MPA-tradeoffs.png"), width=6, height=4, res=600, units = "in")
 chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col)
-title("Tradeoffs (n=16 articles, x=46 cases)") 
+title(paste0("Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"))
+dev.off()
+png(file=paste0(outputdir,"STE by Domain-MPA-synergies.png"), width=6, height=4, res=600, units = "in")
+chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
+title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"))
 dev.off()
 png(file=paste0(outputdir,"STE by Domain-MPA-both.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
-title("Both (n=16 articles, x=46 cases)") 
-dev.off()
-png(file=paste0(outputdir,"STE by Domain-MPA-syn.png"), width=8, height=6, res=600, units = "in")
-chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
-title("Synergies (n=26 articles, x=70 cases)")
+title(paste0("Both (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"))
 dev.off()
 
 #mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
@@ -1076,21 +1165,22 @@ dev.off()
 # title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
 png(file=paste0(outputdir,"STE by Domain-CBNRM-syn.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
-title("Synergies (n=8 articles, x=21 cases)",line=)
+title(paste0("Synergies (n=",length(unique(cbnrm.syn$aid))," articles, x=",nrow(cbnrm.syn)," cases)"))
 dev.off()
 png(file=paste0(outputdir,"STE by Domain-CBNRM-both.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
-title("Both (n=8 articles, x=21 cases)",line=)
+title(paste0("Both (n=",length(unique(cbnrm.both$aid))," articles, x=",nrow(cbnrm.both)," cases)"))
 mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
 dev.off()
 
 #-- Tree maps
 ## MPA
-pdf(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.pdf"))
+png(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.png"), width=5.5, height=5.5, res=600, units = "in")
+#pdf(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.pdf"))
 treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
-        fontsize.labels = c(15,10),
+        fontsize.labels = c(12,11),
         fontcolor.labels=c("white","black"),
         fontface.labels=c(2,1),
         bg.labels=c("transparent"),
@@ -1104,7 +1194,7 @@ treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
 dev.off()
 
 ## CBNRM
-pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM.pdf"))
+#pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM.pdf"))
 treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
         vSize="n",
         type="index",
@@ -1145,14 +1235,21 @@ plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
 ggsave(paste0(outputdir,'STE_over_time.jpg'),width = 13,height = 7)
 
-# study over time
+# study growth over time
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 10.5,height = 6)
 
-# main groups over time
+# study type over time
 pStudy_typ_time
-ggsave(paste0(outputdir,'study_type_over_time.jpg'),width = 11,height = 5)
+ggsave(paste0(outputdir,'study_type_over_time.jpg'),width = 8,height = 4)
 
+#  demographic over time
+pSTE_demo_time
+ggsave(paste0(outputdir,'demographic_over_time.jpg'),width = 11,height = 5)
+
+#  scale over time
+pSTE_scale_time 
+ggsave(paste0(outputdir,'scale_over_time.jpg'),width = 11,height = 5)
 
 ```
