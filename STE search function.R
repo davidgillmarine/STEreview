@@ -6,7 +6,7 @@ library(data.table)
 library(stringr)
 library(tidyr)
 library(dplyr)
-library(readxl)
+library(rio)
 
 #############################################################################################################################
 #search string, written for perl=T

@@ -29,14 +29,16 @@ library(ggplot2)
 library(tidyverse)
 
 # Directories
-dropbox <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
-datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
+dropbox <- "C:/Users/dag71/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
+datadir <- "C:/Users/dag71/Dropbox/data/analysis/STEreview/"
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 ```
 ### Read in and clean up dataframe
 ```{r eval=F}
 ext.table <- read_excel(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
+
+# There are 3 outcomes that are excluded from articles that were included
 paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
 if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
   View(ext.table[ext.table$`05 Exclude`!=ext.table$`40 Exclude`,])
@@ -45,68 +47,110 @@ if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
 # clean up variable names
 names(ext.table) <- gsub(" ","_",names(ext.table))
 ext.data <- ext.table %>% 
-    rename(articleID='Data_extraction_questionnaire.01_Article_ID',
+    rename(aid='Data_extraction_questionnaire.01_Article_ID',
+           Assessor="02_Name_of_Assessor",
+           Assess_date="04_Date_of_assessment",
            exclude='05_Exclude',
-           pub_typ='11_Publication_type',
-           pub_yr='13_Year_of_publication',
-           journal='15_Journal', 
+           Pub_type='11_Publication_type',
+           Authors="12_Author",
+           Pub_year='13_Year_of_publication',
+           Title="14_Title",
+           Journal='15_Journal', 
            source='110_Source', 
-           auth_aff='17_Affiliation_type_of_first_author',           
+           auth_aff='17_Affiliation_type_of_first_author',
+           Funding="18_Funding_source",
+           DOI="19_DOI",
+           Source="110_Source",
+           Bib_notes="111_notes_on_bibliography",
            int_typ='22_Type_of_intervention',
            int_scale='24_Geographic_scale_of_intervention',           
            int_time='25_Timeframe_of_intervention',           
            int_auth='27_Managing_authority',           
-           int_loc='28_Intervention_location',           
-           int_area='29_Intevention_area',           
-           study_typ='32_Study_type',
-           ctrl_gp='33_Study_includes_a_comparison/control_group',
-           ctrl_typ='34_Type_of_comparison_(control_group)',
-           stdy_source='35_Data_source',           
-           stdy_ctry='37_Country_of_study',
+           Int_location='28_Intervention_location',           
+           Int_area='29_Intevention_area',
+           Stated_int="21_Stated_intervention",
+           Desired_out="23_Desired_outcome_of_intervention",
+           Int_dur="25_Timeframe_of_intervention",
+           Int_funding="26_Funding_source",
+           Int_notes="210_notes_on_intervention",
+           Study_goal="31_Stated_goal_of_the_study",
+           Study_type='32_Study_type',
+           Design.control_comp='33_Study_includes_a_comparison/control_group',
+           Comp_type='34_Type_of_comparison_(control_group)',
+           Data_source='35_Data_source',
+           Study_location="36_Location_of_study",
+           Study_country='37_Country_of_study',
            stdy_scl='38_Study_scale',           
-           biome='39_Biome', 
+           Biome.='39_Biome', 
            eval_aff='310_Affliation_of_evaluator',           
-           stdy_unit='311_Social_unit_of_analysis', 
-           stdy_siz='312_Sample_size_(maximum)', 
-           stdy_dur='313_Duration_of_study', 
-           eqty_dist='51_Distributive_equity', 
-           eqty_rcgn='52_Recognitional_equity', 
-           eqty_ctxt='53_Contextual_equity', 
-           eqty_proc='54_Procedural_equity', 
-           cp_toc='61_Causal_pathway/theory_of_change', 
-           exp_mech='62_Explicit_mechanism', 
-           outcomeID='OutcomeID',
-           outcome_stated='41_Stated_outcome_measured',
-           outcome_domain='42_Outcome_domain',
-           outcome_attr='43_Outcome_attribute',
-           outcome_ind='44_Outcome_indicator',
-           outcome_obs='45_Perceptions_vs_observed_outcome',
-           outcome_data_typ='46_Outcome_data-type',
-           resource_typ='47_Resource_use_type',
-           outcome_direct='48_Overall_outcome_direction',
-           outcome_plrl='49_Pluralism_(who_defines_STEs?)',
-           outcome_gp='410_Outcome_sub-group',
+           Unit_analysis='311_Social_unit_of_analysis', 
+           Sample_Size='312_Sample_size_(maximum)', 
+           Study_duration='313_Duration_of_study',
+           Study_notes="314_notes_on_study_type",
+           Distributive_equity='51_Distributive_equity', 
+           Recognitional_equity='52_Recognitional_equity', 
+           Contextual_equity='53_Contextual_equity', 
+           Procedural_equity='54_Procedural_equity',
+           Equity_notes="55_Equity_notes",
+           Causal_pathway='61_Causal_pathway/theory_of_change', 
+           Explicit_mechanism='62_Explicit_mechanism', 
+           Pathway_notes="63_Pathway_notes",
+           oid='OutcomeID',
+           Stated_outcomes='41_Stated_outcome_measured',
+           Out_type='42_Outcome_domain',
+           Out_subtype='43_Outcome_attribute',
+           Indicators='44_Outcome_indicator',
+           Out_definition='45_Perceptions_vs_observed_outcome',
+           Outcome.data_type='46_Outcome_data-type',
+           Resource_type='47_Resource_use_type',
+           Outcome.direction='48_Overall_outcome_direction',
+           Pluralism='49_Pluralism_(who_defines_STEs?)',
+           Out_subgroup='410_Outcome_sub-group',
            STE_domain='411_STE:_social_domain/HWB_outcomes',
-           STE_econgp='412_STE:_(economic_status)',
-           STE_socialgp='413_STE:__(social_status)',
+           STE_econ='412_STE:_(economic_status)',
+           STE_social='413_STE:__(social_status)',
            STE_sex='414_STE:__(sex)',
-           STE_ethnicgp='415_STE:__(ethnic_group/race)',
+           STE_ethnic='415_STE:__(ethnic_group/race)',
            STE_age='416_STE:__(age)',           
            STE_occupation='417_STE:__(occupation)',
-           STE_organization='418_STE:_level_of_social_organization',
-           STE_spatial_units='419_STE:_spatial_units',
-           STE_temporal_units='420_STE:_temporal_units',
-           STE_temporal_scale='421_STE:_temporal_scales')
+           STE_social_org='418_STE:_level_of_social_organization',
+           STE_spatial='419_STE:_spatial_units',
+           STE_temporal_unit='420_STE:_temporal_units',
+           STE_temporal_scale='421_STE:_temporal_scales', 
+           Outcome_notes="422_Outcome_notes" 
+           )
 
 # remove open-ended or unneeded variables
 unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still contain a number in the name
 ext.data <- ext.data %>% 
   select(-one_of(unwanted.var)) %>%
-  mutate(ctrl_typ=gsub("Pre-treatment/post-treatment","Pre/post treatment",ctrl_typ))
-  
-
-
-
+  mutate(Comp_type=gsub("Pre-treatment/post-treatment","Pre/post treatment",Comp_type),
+         Affil_type.Academic=ifelse(grepl("Academic",auth_aff),1,0),
+         Affil_type.Public_sector=ifelse(grepl("Public",auth_aff),1,0),
+         Affil_type.Research_Institute=ifelse(grepl("Research",auth_aff),1,0),
+         Affil_type.Consultant=ifelse(grepl("Consultant",auth_aff),1,0),
+         Affil_type.Non_profit=ifelse(grepl("profit",auth_aff),1,0),
+         Affil_type.Private_sector=ifelse(grepl("Private",auth_aff),1,0),
+         Affil_type.International_Organization=ifelse(grepl("International",auth_aff),1,0),
+         Int_type.MPA=ifelse(grepl("MPA",int_typ),1,0),
+         Int_type.PES=ifelse(grepl("PES",int_typ),1,0),
+         Int_type.CBNRM=ifelse(grepl("CBNRM",int_typ),1,0),
+         Int_type.Certification=ifelse(grepl("Certification",int_typ),1,0),
+         Int_geo.local=ifelse(grepl("Local",int_scale),1,0),
+         Int_geo.region=ifelse(grepl("Region",int_scale),1,0),
+         Int_geo.national=ifelse(grepl("National",int_scale),1,0),
+         Int_geo.subnational=ifelse(grepl("Sub-national",int_scale),1,0),
+         Int_geo.international=ifelse(grepl("International",int_scale),1,0),
+         Mang_auth.Government=ifelse(grepl("Government",int_auth,ignore.case = T),1,0),
+         Mang_auth.Shared_governance=ifelse(grepl("shared",int_auth,ignore.case = T),1,0),
+         Mang_auth.Private_governance=ifelse(grepl("private",int_auth,ignore.case = T),1,0),
+         Mang_auth.Indigenous_community_governance=ifelse(grepl("Indigenous",int_auth,ignore.case = T),1,0),
+         Mang_auth.multiple=ifelse(grepl("multiple",int_auth),1,0),  
+         Mang_auth.mixed=ifelse(grepl("mixed",int_auth,ignore.case = T),1,0))
+# View(select(ext.data,auth_aff,Affil_type.Academic:Affil_type.International_Organization))
+# View(select(ext.data,int_typ,Int_type.MPA:Int_type.Certification))
+# View(select(ext.data,int_scale,Int_geo.local:Int_geo.international))
+# View(select(ext.data,int_auth,Mang_auth.Government:Mang_auth.mixed))
 
 
 ```

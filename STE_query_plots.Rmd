@@ -1,6 +1,6 @@
 ---
 title: "STE_query_plots"
-author: "Sam Cheng, David Gill"
+author: "Sam Cheng, dag71 Gill"
 date: "May 14, 2018"
 output: html_document
 ---
@@ -8,28 +8,27 @@ output: html_document
 load packages, set file directories
 ```{r}
 extrafont::loadfonts(device="win")
-library(tidyr)
 library(gplots)
 library(RColorBrewer)
 library(viridis)
 library(extrafont)
 library(ggthemes)
-library(ggplot2)
 library(d3Network)
 library(treemap)
 library(maptools)
 library(rio)
-library(cowplot)
 library(circlize)
-library(dplyr)
+library(waffle)
+library(tidyverse)
+
 
 # setwd("~/Documents/github/marine_ste/")
 # map_data_final <- readRDS("data/map_data_final_4_24.rds")
 # load("data/STE_Evidence_Map_2_10_2018.RData")
 # Directories
-dropbox <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
-datadir <- "C:/Users/dgill6/Dropbox/data/analysis/STEreview/"
-outputdir <- "C:/Users/dgill6/Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/"
+dropbox <- "C:/Users/dag71/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
+datadir <- "C:/Users/dag71/Dropbox/data/analysis/STEreview/"
+outputdir <- "C:/Users/dag71/Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/"
 
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
@@ -179,7 +178,7 @@ data <- ext.data %>%
     arrange(-num) %>% 
     mutate(x.labels=ordered(UQ(enquo_z))) %>% 
     ggplot(aes(x=reorder(x.labels,num),y=num))+
-    geom_bar(stat='identity', fill='blue') +
+    geom_bar(stat='identity', fill='blue', width = 1) +
     coord_flip()}
 
 # outcome level stats
@@ -218,6 +217,7 @@ Intervention properties, study design, etc.
 
 # Publication year
 table(data$Pub_year)
+summary(data$Pub_year)
 minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
 (pPubyr<- data %>% 
     group_by(aid,Pub_year) %>% 
@@ -229,22 +229,31 @@ minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
 
 # Publication type
-data %>% group_by(Pub_type) %>% summarise(n_distinct(aid))
+data %>% group_by(Pub_type) %>% summarise(num=n_distinct(aid), pct=num/75)
 (pPubtype<-ste_gp(Pub_type) +
   xlab("Publication type"))
 
 # Author affliation
-data %>% group_by(auth_aff) %>% summarise(n_distinct(aid))
+data %>% group_by(auth_aff) %>% summarise(num=n_distinct(aid), pct=num/75)
 (pAuth_aff<-ste_gp(auth_aff) +
   xlab("Author affliation"))
+data %>% group_by(Affil_type.Academic) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Affil_type.Research_Institute) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Affil_type.Academic) %>% summarise(num=n_distinct(aid), pct=num/75)
 
 # Intervention type
-data %>% group_by(Int_type) %>%summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=num/75)
+(55+9)/75
 (pInt_typ<-ste_gp(Int_type) +
   xlab("Intervention type"))
 
+int.type <- data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=paste0("(",round((num/75)*100)," %)")) %>% 
+              unite("Intervention",Int_type,pct, sep=" ") %>% arrange (-num)
+(pInt_typ.waffle <- waffle(int.type, rows = 7, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
+(pInt_typ.waffle <- waffle(int.type, rows = 8, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
+
 # Intervention scale
-data %>% group_by(int_scale) %>% summarise(n_distinct(aid))
+data %>% group_by(int_scale) %>% summarise(num=n_distinct(aid), pct=num/75)
 (pInt_scale<-ste_gp(int_scale) +
   xlab("Intervention scale"))
 
@@ -277,11 +286,57 @@ data %>% group_by(Comp_type) %>% summarise(num=n_distinct(aid), pct=num/75)
 data %>% group_by(Biome.) %>% summarise(n_distinct(aid))
 (pBiome<-ste_gp(Biome.) +
   xlab("Biome"))
+Biome <- data %>% group_by(Biome.) %>% summarise(num=n_distinct(aid), pct=num/75) %>% 
+  mutate (coral=ifelse(grepl("coral",Biome.),1,0)) 
+sum(Biome$pct[Biome$coral==1])
 
-# # Country
-# data %>% group_by(Study_country) %>% summarise(n_distinct(aid))
-# (pCountry<-ste_gp(Study_country) +
-#   xlab("Study country"))
+# Country (values by study)
+country <- import(paste0(datadir,"allcountries.csv"))
+ctry <- data %>% group_by(aid,Study_country) %>%  summarise(n_distinct(aid)) %>%
+        left_join(country,by=c("Study_country"="Country")) %>% 
+  # quick fix for NAs
+        mutate(Region=ifelse(aid==67396,"Latin America",Region),Subregion=ifelse(aid==67396,"Caribbean",Subregion),
+               Region=ifelse(aid==67550,"Northern America",Region),Subregion=ifelse(aid==67550,"Northern & Central America",Subregion),
+               Region=ifelse(aid==68668,"Asia",Region),Subregion=ifelse(aid==68668,"South-Eastern Asia",Subregion))
+ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(-pct)
+
+(pSubRegion<-  ctry %>%
+    group_by(Subregion,Region) %>% 
+    summarise(num=n_distinct(aid)) %>% 
+    mutate(x.labels=ordered(Subregion)) %>% 
+    ggplot(aes(x=reorder(x.labels,num),y=num))+
+    geom_bar(stat='identity', fill='blue', width = 1) +
+    xlab("Sub-Region") +
+    coord_flip())
+
+# Country (values by country)
+ctry <- data %>%
+  mutate(Study_country=gsub(",",";",Study_country),
+         Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
+         Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
+  group_by(aid,Study_country) %>%
+  summarise()
+ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE))) 
+names(ctry) <- 'ctry'
+ctry_sum <-ctry %>% 
+  mutate(ctry=as.character(ctry)) %>% 
+  group_by(ctry) %>% 
+  count() %>% 
+  left_join(country,by=c("ctry"="Country"))
+#head(ctry_sum)
+
+ctry_sum %>% group_by(Subregion) %>% summarise(num=sum(n), pct=num/75)
+
+(pSubRegion<-  ctry_sum %>%
+    filter(!is.na(n)) %>% 
+    group_by(Subregion) %>% 
+    summarise(num=sum(n)) %>% 
+    arrange(-num) %>% 
+    mutate(x.labels=ordered(Subregion)) %>% 
+    ggplot(aes(x=reorder(x.labels,num),y=num))+
+    geom_bar(stat='identity', fill='blue', width = 1) +
+    xlab("Sub-Region") +
+    coord_flip())
 
 ## Grouped plots
 # About study
@@ -310,7 +365,7 @@ table(data$Outcome.data_type)/sum(!is.na(data$Outcome.data_type))
 (pDatatype <-  ste_gp_o('Outcome.data_type') %>% 
   ggplot(aes(x=reorder(Outcome.data_type,num),y=num))+
   ste_hist() +
-  xlab("Outcome data type"))
+  xlab("Outcome data type") + ylab("# cases"))
  
 # Perceived vs observed
 table(data$Out_definition)
@@ -320,7 +375,7 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
 (pDataobs <- ste_gp_o('outcome_obs1') %>% 
   ggplot(aes(x=reorder(outcome_obs1,num),y=num))+
   ste_hist() +
-  xlab("Data 'observer'"))
+  xlab("Data 'observer'")+ ylab("# cases"))
 
 # Dimensions
 ste.data <- data %>% 
@@ -581,8 +636,8 @@ map <-broom::tidy(map,region="ISO3")
 (study_map <- ggplot() +
   geom_map(data=country, aes(map_id=code, fill=n),map=map) +
   expand_limits(x=map$long,y=map$lat) +
-  theme(panel.background = element_rect(fill = "darkgray", colour = "darkgray"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-  scale_fill_gradient2(low="white",mid="#6baed6",high="#08519c",
+  theme(panel.background = element_rect(fill = "#525252", colour = "#525252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
                        midpoint=(max(country$n)/2),limits=c(0,max(country$n))))
 
 #load in full country list
@@ -831,22 +886,53 @@ mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
 ```{r eval=T}
 #Treemapping to look at outcome subtypes within outcome domains
 outcomes <- select(data,aid,oid,Int_type,Out_type,Out_subtype)
-foo <- data.frame(do.call('rbind', strsplit(as.character(outcomes$Out_subtype),', ',fixed=TRUE)))
-outcomes2 <- outcomes %>% 
-  bind_cols(foo) %>% 
-  select(-Out_subtype) %>% 
-  gather("X","Out_subtype", X1:X6) %>% 
+# find out the max # subtypes per row for separation
+max.subtypes <- paste0("o.sub",rep(1:max(str_count(outcomes$Out_subtype, ",")+1))) 
+outcomes2 <-data %>% 
+  select(aid,oid,Int_type,Out_type,Out_subtype) %>% 
+  separate(Out_subtype,max.subtypes, sep=", ",fill="right") %>% # fill=right fills blanks with NAs
+  gather("X","Out_subtype", max.subtypes) %>% 
+  filter(!is.na(Out_subtype)) %>% 
   select(-X) %>% 
-  distinct()
-mpa_out <- filter(outcomes2,Int_type == "MPA") %>% select(oid,Out_type,Out_subtype)
-cbnrm_out <- filter(outcomes2,Int_type == "CBNRM")
-cbnrm_mpa_out <- filter(outcomes2,Int_type == "CBNRM_MPA")
-mpa_tree_count <- count(mpa_out,Out_type,Out_subtype)
-cbnrm_tree_count <- count(cbnrm_out,Out_type,Out_subtype)
-cbnrm_mpa_tree_count <- count(cbnrm_mpa_out,Out_type,Out_subtype)
+  group_by(Int_type,Out_type,Out_subtype) %>% 
+  count()
+
+head(outcomes2)
+export(outcomes2 %>% spread(Int_type,n),
+       paste0(outputdir,"outcome subtypes by intervention.csv"))
+
+# get n for each high level group
+outcomes3 <-outcomes2 %>% 
+  left_join(outcomes2 %>% 
+    group_by(Int_type,Out_type) %>% 
+    summarise(int_sum=sum(n))) %>% 
+  left_join(outcomes2 %>% 
+    group_by(Out_type) %>% 
+    summarise(all_sum=sum(n))) %>% 
+    mutate(Out_type_all=paste0(Out_type,"\n (",all_sum,(")")),
+           Out_type_int=paste0(Out_type,"\n (",int_sum,(")"))) 
+mpa_tree_count <- filter(outcomes3,Int_type == "MPA") 
+cbnrm_tree_count <- filter(outcomes3,Int_type == "CBNRM") 
+cbnrm_mpa_tree_count <- filter(outcomes3,Int_type == "CBNRM_MPA") 
 
 #pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
-treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
+treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="All interventions")
+
+#pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
+treemap(mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -862,7 +948,7 @@ treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
         title="MPAs")
 # dev.off()
 # pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM.pdf"))
-treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
+treemap(cbnrm_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -879,7 +965,7 @@ treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
 # dev.off()
 
 # pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
-treemap(cbnrm_mpa_tree_count,index=c("Out_type","Out_subtype"),
+treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -902,72 +988,72 @@ Still need to figure out other graphs over time:
 * rate of change?
 * make prettier 
 ```{r eval=T}
-demographic_ste <- c("STE_age", "STE_econ","STE_ethnic","STE_occupation","STE_sex","STE_social")
-spat_temp_ste <- c("STE_spatial","STE_temporal_unit","STE_temporal_scale")
-pub_per_yr <-data %>%
-  select(aid,Pub_year) %>% 
-  group_by(Pub_year) %>% 
-  summarise(pub_per_yr= n_distinct(aid))
-STE_time <-  data %>%
-  select(aid,Pub_year,STE_domain:STE_temporal_scale) %>% 
-  mutate(STE_demogr = ifelse(rowSums(!is.na(.[demographic_ste]))>0,"1",NA),
-         STE_spatial_temp= ifelse(rowSums(!is.na(.[spat_temp_ste]))>0,"1",NA)) %>% 
-  gather("STE_type","val",STE_domain:STE_spatial_temp) %>% 
-  filter(!is.na(val)) %>% 
-  group_by(Pub_year,STE_type) %>% 
-  summarise(ste_per_yr= n_distinct(aid)) %>% 
-  left_join(pub_per_yr,by="Pub_year")  %>% 
-  spread(STE_type,value = ste_per_yr) %>% 
-  mutate_at(vars(pub_per_yr:STE_temporal_unit),funs(replace(., is.na(.), 0))) %>% 
-  ungroup() %>% 
-  arrange(Pub_year) %>% 
-  mutate_at(vars(pub_per_yr:STE_temporal_unit),funs(cumsum(.))) 
-tail(STE_time)
-
-pSTE_domain <- ggplot(STE_time,aes(x = Pub_year, y=STE_domain)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('Domain')+ylim(c(0,60))+geom_line(aes(y = STE_domain))
-pSTE_econ <- ggplot(STE_time,aes(x = Pub_year, y=STE_econ)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('Econ gp')+ylim(c(0,40))+geom_line(aes(y = STE_econ))
-pSTE_social <- ggplot(STE_time,aes(x = Pub_year, y=STE_social)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('socialgp')+ylim(c(0,40))+geom_line(aes(y = STE_social))
-pSTE_sex <- ggplot(STE_time,aes(x = Pub_year, y=STE_sex)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('sex')+ylim(c(0,40))+geom_line(aes(y = STE_sex))
-pSTE_ethnic <- ggplot(STE_time,aes(x = Pub_year, y=STE_ethnic)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('ethnicgp')+ylim(c(0,40))+geom_line(aes(y = STE_ethnic))
-pSTE_age <- ggplot(STE_time,aes(x = Pub_year, y=STE_age)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('age')+ylim(c(0,40))+geom_line(aes(y = STE_age))
-pSTE_occupation <- ggplot(STE_time,aes(x = Pub_year, y=STE_occupation)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('occupation')+ylim(c(0,40))+geom_line(aes(y = STE_occupation))
-pSTE_social_org <- ggplot(STE_time,aes(x = Pub_year, y=STE_social_org)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('organization')+ylim(c(0,40))+geom_line(aes(y = STE_social_org))
-pSTE_spatial <- ggplot(STE_time,aes(x = Pub_year, y=STE_spatial)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('spatial_units')+ylim(c(0,40))+geom_line(aes(y = STE_spatial))
-pSTE_temporal_unit <- ggplot(STE_time,aes(x = Pub_year, y=STE_temporal_unit)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('temporal_units')+ylim(c(0,40))+geom_line(aes(y = STE_temporal_unit))
-pSTE_temporal_scale <- ggplot(STE_time,aes(x = Pub_year, y=STE_temporal_scale)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('temporal_scale')+ylim(c(0,40))+geom_line(aes(y = STE_temporal_scale))
-pSTE_demo <- ggplot(STE_time,aes(x = Pub_year, y=STE_demo)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('Demographic')+ylim(c(0,100))+geom_line(aes(y = STE_demogr))
-pSTE_spatial_temp <- ggplot(STE_time,aes(x = Pub_year, y=STE_spatial_temp)) +
-    ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-    ggtitle('Spatio-temporal')+ylim(c(0,60))+geom_line(aes(y = STE_spatial_temp))
-
-plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
-          pSTE_ethnic,pSTE_age,pSTE_occupation,
-          pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
-          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+# demographic_ste <- c("STE_age", "STE_econ","STE_ethnic","STE_occupation","STE_sex","STE_social")
+# spat_temp_ste <- c("STE_spatial","STE_temporal_unit","STE_temporal_scale")
+# pub_per_yr <-data %>%
+#   select(aid,Pub_year) %>% 
+#   group_by(Pub_year) %>% 
+#   summarise(pub_per_yr= n_distinct(aid))
+# STE_time <-  data %>%
+#   select(aid,Pub_year,STE_domain:STE_temporal_scale) %>% 
+#   mutate(STE_demogr = ifelse(rowSums(!is.na(.[demographic_ste]))>0,"1",NA),
+#          STE_spatial_temp= ifelse(rowSums(!is.na(.[spat_temp_ste]))>0,"1",NA)) %>% 
+#   gather("STE_type","val",STE_domain:STE_spatial_temp) %>% 
+#   filter(!is.na(val)) %>% 
+#   group_by(Pub_year,STE_type) %>% 
+#   summarise(ste_per_yr= n_distinct(aid)) %>% 
+#   left_join(pub_per_yr,by="Pub_year")  %>% 
+#   spread(STE_type,value = ste_per_yr) %>% 
+#   mutate_at(vars(pub_per_yr:STE_temporal_unit),funs(replace(., is.na(.), 0))) %>% 
+#   ungroup() %>% 
+#   arrange(Pub_year) %>% 
+#   mutate_at(vars(pub_per_yr:STE_temporal_unit),funs(cumsum(.))) 
+# tail(STE_time)
+# 
+# pSTE_domain <- ggplot(STE_time,aes(x = Pub_year, y=STE_domain)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('Domain')+ylim(c(0,60))+geom_line(aes(y = STE_domain))
+# pSTE_econ <- ggplot(STE_time,aes(x = Pub_year, y=STE_econ)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('Econ gp')+ylim(c(0,40))+geom_line(aes(y = STE_econ))
+# pSTE_social <- ggplot(STE_time,aes(x = Pub_year, y=STE_social)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('socialgp')+ylim(c(0,40))+geom_line(aes(y = STE_social))
+# pSTE_sex <- ggplot(STE_time,aes(x = Pub_year, y=STE_sex)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('sex')+ylim(c(0,40))+geom_line(aes(y = STE_sex))
+# pSTE_ethnic <- ggplot(STE_time,aes(x = Pub_year, y=STE_ethnic)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('ethnicgp')+ylim(c(0,40))+geom_line(aes(y = STE_ethnic))
+# pSTE_age <- ggplot(STE_time,aes(x = Pub_year, y=STE_age)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('age')+ylim(c(0,40))+geom_line(aes(y = STE_age))
+# pSTE_occupation <- ggplot(STE_time,aes(x = Pub_year, y=STE_occupation)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('occupation')+ylim(c(0,40))+geom_line(aes(y = STE_occupation))
+# pSTE_social_org <- ggplot(STE_time,aes(x = Pub_year, y=STE_social_org)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('organization')+ylim(c(0,40))+geom_line(aes(y = STE_social_org))
+# pSTE_spatial <- ggplot(STE_time,aes(x = Pub_year, y=STE_spatial)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('spatial_units')+ylim(c(0,40))+geom_line(aes(y = STE_spatial))
+# pSTE_temporal_unit <- ggplot(STE_time,aes(x = Pub_year, y=STE_temporal_unit)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('temporal_units')+ylim(c(0,40))+geom_line(aes(y = STE_temporal_unit))
+# pSTE_temporal_scale <- ggplot(STE_time,aes(x = Pub_year, y=STE_temporal_scale)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('temporal_scale')+ylim(c(0,40))+geom_line(aes(y = STE_temporal_scale))
+# pSTE_demo <- ggplot(STE_time,aes(x = Pub_year, y=STE_demo)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('Demographic')+ylim(c(0,100))+geom_line(aes(y = STE_demogr))
+# pSTE_spatial_temp <- ggplot(STE_time,aes(x = Pub_year, y=STE_spatial_temp)) +
+#     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
+#     ggtitle('Spatio-temporal')+ylim(c(0,60))+geom_line(aes(y = STE_spatial_temp))
+# 
+# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
+#           pSTE_ethnic,pSTE_age,pSTE_occupation,
+#           pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
+#           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
 
 # STE_time_gps <- STE_time %>%
 #   select(Pub_year,pub_per_yr,STE_domain,STE_demogr,STE_spatial_temp) %>%
@@ -981,6 +1067,16 @@ plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
 #  # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
  
 # Growth by intervention
+All_time_gps <- data %>%
+  group_by(Pub_year) %>% 
+  summarise(pub.per.yr= n_distinct(aid)) %>% 
+  ungroup() %>% 
+  arrange(Pub_year) %>% 
+  mutate(val=cumsum(pub.per.yr),
+         gp="All") %>% 
+    select(Pub_year,gp,val)
+tail(All_time_gps)
+
 Int_time_gps <-  data %>%
   group_by(Pub_year,Int_type) %>% 
   summarise(int_per_yr= n_distinct(aid)) %>% 
@@ -989,7 +1085,8 @@ Int_time_gps <-  data %>%
   ungroup() %>% 
   arrange(Pub_year) %>% 
   mutate_at(vars(CBNRM:MPA),funs(cumsum(.))) %>% 
-  gather("int_typ","val",CBNRM:MPA) 
+  gather("int_typ","val",CBNRM:MPA) %>% 
+  bind_rows(All_time_gps %>% rename(int_typ=gp))
 tail(Int_time_gps)
 # non-elegant way to convert units to factor in order to reorder plot legends
 order.gp <- Int_time_gps %>% group_by(int_typ) %>% summarise(order_typ=max(val)) %>% arrange(desc(order_typ)) %>% pull(int_typ)
@@ -1006,7 +1103,8 @@ Int_time_gps <- Int_time_gps %>%
 STE_time_demog <- STE_time %>%
   select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_sex,STE_social) %>%
   gather("STE_gp","val",STE_age:STE_social) %>% 
-  mutate(STE_gp=gsub("STE_","",STE_gp))
+  mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
+  bind_rows(All_time_gps %>% rename(STE_gp=gp))
 # non-elegant way to convert units to factor in order to reorder plot legends
 order.gp <- STE_time_demog %>% group_by(STE_gp) %>% summarise(order_typ=max(val)) %>% arrange(desc(order_typ)) %>% pull(STE_gp)
 STE_time_demog <- STE_time_demog %>%  
@@ -1023,11 +1121,12 @@ STE_time_dom <-  data %>%
   group_by(Pub_year,Out_type) %>% 
   summarise(dom_per_yr= n_distinct(aid))   %>%
   spread(Out_type,value = dom_per_yr) %>% 
-  mutate_at(vars(Culture:`Social capital`),funs(replace(., is.na(.), 0))) %>% 
+  mutate_at(vars(Culture:`Social capital`),funs(replace(., is.na(.), 0))) %>%
   ungroup() %>% 
   arrange(Pub_year) %>% 
   mutate_at(vars(Culture:`Social capital`),funs(cumsum(.))) %>% 
-  gather("out_typ","val",Culture:`Social capital`) 
+  gather("out_typ","val",Culture:`Social capital`) %>% 
+  bind_rows(All_time_gps %>% rename(out_typ=gp))
 tail(STE_time_dom)
 
 # non-elegant way to convert units to factor in order to reorder plot legends
@@ -1046,7 +1145,8 @@ STE_scale_gps <- STE_time %>%
   select(Pub_year,STE_spatial,STE_temporal_scale,STE_temporal_unit) %>%
   gather("STE_gp","val",STE_spatial:STE_temporal_unit) %>% 
   mutate(STE_gp=gsub("STE_","",STE_gp),
-         STE_gp=gsub("spatial","spatial_unit",STE_gp))
+         STE_gp=gsub("spatial","spatial_unit",STE_gp)) %>% 
+  bind_rows(All_time_gps %>% rename(STE_gp=gp))
 
 # non-elegant way to convert units to factor in order to reorder plot legends
 order.gp <- STE_scale_gps %>% group_by(STE_gp) %>% summarise(order_typ=max(val)) %>% arrange(desc(order_typ)) %>% pull(STE_gp)
@@ -1101,6 +1201,9 @@ ggsave(paste0(outputdir,'STE pub info.jpg'),width = 10.5,height = 6)
 plot_grid(pInt_typ,pInt_scale,pBiome
           ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE intervention info.jpg'),width = 14,height = 9)
+pInt_typ.waffle 
+ggsave(paste0(outputdir,'STE intervention waffle.jpg'),width = 8,height = 4)
+
 ## about study
 plot_grid(pStdy_scl,pStdy_source,pStudy_typ,pCtrl_gp,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
@@ -1113,6 +1216,12 @@ ggsave(paste0(outputdir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
 plot_grid(pDatatype,pDataobs,pStudy_typ, pCtrl_gp,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'study design.jpg'),width = 7,height = 5)
+# plot_grid(pDatatype,pDataobs,ncol = 1, nrow = 2, hjust=-1) +
+#   theme(axis.text=element_text(size=14),axis.title=element_text(size=14,face="bold"))
+# ggsave(paste0(outputdir,'study design1.jpg'),width = 4,height = 4)
+# plot_grid(pStudy_typ, pCtrl_gp,ncol = 1, nrow = 2, hjust=-1)+
+#   theme(axis.text=element_text(size=14),axis.title=element_text(size=14,face="bold"))
+# ggsave(paste0(outputdir,'study design2.jpg'),width = 4,height = 4)
 
 #-- World map
 png(file=paste0(outputdir,"STE_Country_Map_dark.png"), width=13.5, height=8, res=600, units = "in")
@@ -1174,10 +1283,27 @@ mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
 dev.off()
 
 #-- Tree maps
+# All interventions
+png(file=paste0(outputdir,"Outcome_attr_by_domain_all.png"), width=9, height=8, res=600, units = "in")
+treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="All interventions")
+dev.off()
 ## MPA
-png(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.png"), width=5.5, height=5.5, res=600, units = "in")
+png(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.png"), width=9, height=9, res=600, units = "in")
 #pdf(file=paste0(outputdir,"Outcome_attr_by_domain_MPA.pdf"))
-treemap(mpa_tree_count,index=c("Out_type","Out_subtype"),
+treemap(mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(12,11),
@@ -1195,7 +1321,7 @@ dev.off()
 
 ## CBNRM
 #pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM.pdf"))
-treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
+treemap(cbnrm_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
@@ -1212,7 +1338,7 @@ treemap(cbnrm_tree_count,index=c("Out_type","Out_subtype"),
 dev.off()
 ## CBNRM_MPA
 pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
-treemap(cbnrm_mpa_tree_count,index=c("Out_type","Out_subtype"),
+treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
         type="index",
         fontsize.labels = c(15,10),
