@@ -7,10 +7,12 @@ output: html_document
 ##Setup
 load packages, set file directories
 ```{r}
-# first time install for waffle package
+# first time install for waffle package, ggplot with sf
 # library(devtools)
 # install_github("hrbrmstr/waffle")
 # font_import()
+#devtools::install_github("tidyverse/ggplot2")
+
 
 extrafont::loadfonts(device="win")
 library(gplots)
@@ -24,6 +26,8 @@ library(maptools)
 library(rio)
 library(circlize)
 library(waffle)
+library(sf)
+library(ggplot2)
 library(tidyverse)
 
 
@@ -284,7 +288,10 @@ data %>% group_by(Affil_type.Non_profit) %>% summarise(num=n_distinct(aid), pct=
 data %>% group_by(Affil_type.Public_sector) %>% summarise(num=n_distinct(aid), pct=num/75)
 data %>% group_by(Affil_type.International_Organization) %>% summarise(num=n_distinct(aid), pct=num/75)
 
+data %>% group_by(auth_ctry1) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(desc(num)) %>% mutate(pct_sum=cumsum(pct))
 
+(pAuth_ctry<-ste_gp(auth_ctry1) +
+  xlab("Author institution location"))
 
 # --------- Intervention general information
 # Country/Region (values per study: i.e. x% of studies where in this region )
@@ -766,62 +773,72 @@ map <-broom::tidy(map,region="ISO3")
 
 
 #--------------- Connections (https://www.gis-blog.com/flight-connection-map-with-r/)
-# fix data in country column
-# test <- data %>%
-#   mutate(Study_country=gsub(",",";",Study_country),
-#          Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
-#          Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
-#   group_by(aid,auth_ctry1,Study_country) %>%
-#   summarise()
-# head(test1)
-# 
-# max.ctry <- paste0("ctry",rep(1:max(str_count(test$Study_country, ";")+1))) # create vector of column names for each country
-# test1 <-test %>% 
-#   separate(Study_country,max.ctry, sep="; ",fill="right") %>% # fill=right fills blanks with NAs
-#   gather("X","Country", max.ctry) %>% 
-#   filter(!is.na(Country)) %>% 
-#   select(-X) %>% 
-#   group_by(auth_ctry1,Country) %>% 
-#   count() %>% 
-#   rename(stdy_ctry="Country")
-# 
-# 
-# #load in full country list
-# test2 <- country %>% 
-#   left_join(test1,by=c("Country"="stdy_ctry")) %>%
-#   mutate(n=replace(n, is.na(n), 0)) %>% 
-#   rename(stdy_code="Country")
-# 
-# head(test2)
-# test1$Country[!test1$Country%in%test2$Country] # any missing?
-# 
-# # read in map
-# map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
-# map <- st_read(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
-# map.pts <- st_centroid(map) %>% 
-#   left_join(test2,by=c("ISO3"="code")) 
-# head(map.pts)
-# plot(st_geometry(map))
-# plot(st_geometry(map.pts),add=T)
-# 
-# for (i in (1:nrow(map.pts))) { 
-# inter <- gcIntermediate(c(jfk$LON[1], jfk$LON[1]), c(usairports$lon[i], usairports$lat[i]), n=200)
-# lines(inter, lwd=0.1, col="turquoise2")    
-# }
-# 
-# 
-# 
-# #map@data[map@data$NAME=="Turks and Caicos Islands",]
-# #plot
-# (study_ctry_map <- ggplot() +
-#   geom_map(data=test2, aes(map_id=code, fill=n),map=map.test) +
-#   expand_limits(x=map.test$long,y=map.test$lat) +
-#   theme(panel.background = element_rect(fill = "#525252", colour = "#525252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-#   scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
-#                        midpoint=(max(test2$n)/2),limits=c(0,max(test2$n))))
-# 
-#   
+#fix data in country column
+connect <- data %>%
+  mutate(Study_country=gsub(",",";",Study_country),
+         Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
+         Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
+  group_by(aid,auth_ctry1,Study_country) %>%
+  summarise()
+head(connect)
 
+max.ctry <- paste0("ctry",rep(1:max(str_count(connect$Study_country, ";")+1))) # create vector of column names for each country
+connect1 <-connect %>%
+  separate(Study_country,max.ctry, sep="; ",fill="right") %>% # fill=right fills blanks with NAs
+  gather("X","Country", max.ctry) %>%
+  filter(!is.na(Country)) %>%
+  select(-X) %>%
+  group_by(auth_ctry1,Country) %>%
+  count() %>%
+  rename(stdy_ctry="Country")
+head(connect1)
+
+# get lat lon for country centroids
+map <- st_read(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp")) %>% 
+        left_join(ctry_sum1,by= c("ISO3"="code")) %>% 
+        mutate(n=replace(n, is.na(n), 0))
+map.pts <- st_centroid(map) %>%
+  st_set_geometry(NULL) %>% 
+  select(ISO3,LON,LAT)
+head(map.pts)
+
+connect2 <- connect1 %>% 
+  left_join(select(country,Country,code),by=c("stdy_ctry"="Country")) %>% 
+  rename(stdy_code=code) %>% 
+  mutate(stdy_code=ifelse(stdy_ctry=="Bahamas","BHS",stdy_code)) %>% 
+  left_join(select(country,Country,code),by=c("auth_ctry1"="Country")) %>% 
+  rename(auth_code=code) %>% 
+  left_join(map.pts,by=c("stdy_code"="ISO3")) %>% 
+  rename(stdy_lat=LAT,stdy_lon=LON) %>% 
+  left_join(map.pts,by=c("auth_code"="ISO3")) %>% 
+  rename(auth_lat=LAT,auth_lon=LON) %>% 
+  mutate(stdy_lon=ifelse(stdy_code==auth_code,stdy_lon-1,stdy_lon),
+         stdy_lat=ifelse(stdy_code==auth_code,stdy_lat-1,stdy_lat),
+         auth_lon=ifelse(stdy_code==auth_code,auth_lon+1,auth_lon),
+         auth_lat=ifelse(stdy_code==auth_code,auth_lat+1,auth_lat))
+
+auth.pts <- st_as_sf(connect2,coords = c("auth_lon","auth_lat")) %>% st_set_crs(st_crs(map))
+stdy.pts <- st_as_sf(connect2,coords = c("stdy_lon","stdy_lat")) %>% st_set_crs(st_crs(map))
+
+inter <- geosphere::gcIntermediate(connect2[,c("auth_lon","auth_lat")], connect2[,c("stdy_lon","stdy_lat")], n=200,
+                                   breakAtDateLine=T,sp=T)
+inter.sf <- st_as_sf(inter) %>% 
+          bind_cols(connect2) 
+#inter.sf[grepl("Eygpt",inter.sf$stdy_ctry),]
+(auth_stdy_connect <- ggplot() +
+    geom_sf(data =map, aes(fill = n)) +
+      theme(panel.background = element_rect(fill = "#525252", colour = "#525252"),panel.grid = element_blank()) +
+  geom_sf(data =auth.pts, aes(col = "chocolate1"),size=0.5,show.legend=F) +
+  geom_sf(data =stdy.pts, aes(col = "chocolate1"),size=0.5,show.legend=F) +
+  geom_sf(data =inter.sf, aes(col = "turquoise2"),show.legend=F))
+ # expand_limits(x=map.connect$long,y=map.connect$lat) +
+  # scale_fill_gradient2(low="black",mid="#2171b5",high="#08519c",
+  #                      midpoint=(max(connect2$n)/2),limits=c(0,max(connect2$n))))
+
+# #create basemap
+# maps::map("world", fill=T, col="grey8", bg="grey15")
+# #overlay source country
+# points(test2[,c("auth_lon","auth_lat")], pch=3, cex=0.1, col="chocolate1")
 
 #load in full country list
 # country <- read.csv(paste0(datadir,"allcountries.csv"), head=TRUE, sep=",")
@@ -1421,8 +1438,12 @@ dev.off()
 
 png(file=paste0(outputdir,"Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
 #pdf(file=paste0(outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
-plot_grid(study_ctry_map,auth_ctry_map,labels=letters[1:4], ncol = 1, nrow = 2, hjust=-1)
+plot_grid(study_ctry_map + labs(title="Study locations"),
+          auth_ctry_map + labs(title="Author insitutions"),labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
 dev.off()
+
+auth_stdy_connect + labs(title="Author insitution:study Site distance")
+ggsave(paste0(outputdir,'auth_stdy_connect.jpg'),width = 10.5,height = 6)
 
 #-- Heat maps
 ## all outcomes combined
