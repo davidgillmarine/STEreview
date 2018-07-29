@@ -1,12 +1,17 @@
 ---
 title: "STE_query_plots"
-author: "Sam Cheng, dag71 Gill"
+author: "Sam Cheng, David Gill"
 date: "May 14, 2018"
 output: html_document
 ---
 ##Setup
 load packages, set file directories
 ```{r}
+# first time install for waffle package
+# library(devtools)
+# install_github("hrbrmstr/waffle")
+# font_import()
+
 extrafont::loadfonts(device="win")
 library(gplots)
 library(RColorBrewer)
@@ -25,10 +30,12 @@ library(tidyverse)
 # setwd("~/Documents/github/marine_ste/")
 # map_data_final <- readRDS("data/map_data_final_4_24.rds")
 # load("data/STE_Evidence_Map_2_10_2018.RData")
+
 # Directories
-dropbox <- "C:/Users/dag71/Dropbox/SynergiesTradeoffs.Review/Data extraction/"
-datadir <- "C:/Users/dag71/Dropbox/data/analysis/STEreview/"
-outputdir <- "C:/Users/dag71/Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/"
+pcdir <- gsub("Dropbox.*","",getwd())
+dropbox <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/")
+datadir <- paste0(pcdir,"Dropbox/data/analysis/STEreview/")
+outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/")
 
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
@@ -40,6 +47,7 @@ source("my_summary_plot_functions.R")
 
 ### Read in and prep data
 ```{r eval=T}
+country <- import(paste0(datadir,"allcountries.csv"))
 ext.table <- import(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
 # paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
 # if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
@@ -59,6 +67,7 @@ ext.data <- ext.table %>%
          Title="14_Title",
          Journal='15_Journal', 
          source='110_Source', 
+         auth_aff_addr='16_Affiliation_of_first_author',
          auth_aff='17_Affiliation_type_of_first_author',
          Funding="18_Funding_source",
          DOI="19_DOI",
@@ -160,10 +169,40 @@ data <- ext.data %>%
          Comp_type.unmatch.BACI=ifelse(grepl("Unmatched BACI",Comp_type),1,0),
          Comp_type.none=ifelse(!is.na(Comp_type),1,0)) %>% 
         filter(exclude==FALSE & outcome.exclude==FALSE)
-
 # check greps
 # View(select(data,contains('Int_geo'),contains('int_scale')) %>% filter(!is.na(int_scale)))
 
+# Author institution country
+USnames <- c(" US"," USA",",US",",USA","U.S","U.S.A","Central Washington University","University of Washington",
+             "World Bank","University of Rhode Island,","Arlington, VA")
+UKnames <- c("UK","U.K")
+CANnames <- c("British Columbia","Memorial University")
+data <- data %>% 
+  mutate(auth_ctry1 = str_extract(auth_aff_addr,paste(country$Country,collapse="|")),
+         auth_ctry1 =ifelse(grepl(paste(USnames,collapse="|"),auth_aff_addr),"United States",auth_ctry1),
+         auth_ctry1 =ifelse(grepl(paste(UKnames,collapse="|"),auth_aff_addr),"United Kingdom",auth_ctry1),
+         auth_ctry1 =ifelse(grepl(paste(CANnames,collapse="|"),auth_aff_addr),"Canada",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Silliman Unversity Marine Laboratory",auth_aff_addr),"Philippines",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("USAID/Philippine",auth_aff_addr),"Philippines",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Fundacion Natura",auth_aff_addr),"Ecuador",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("University of Technology Srivijaya",auth_aff_addr),"Thailand",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Bayero University Kano",auth_aff_addr),"Nigeria",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Harvard University",auth_aff_addr),"United States",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Taiwan",auth_aff_addr),"Taiwan, Province Of China",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Universidade Estadual de Santa Cruz",auth_aff_addr),"Brazil",auth_ctry1),
+         auth_ctry1 =ifelse(grepl("Universidad Nacional Autónoma de México",auth_aff_addr),"Mexico",auth_ctry1))  
+# for double affiliation
+data <- data %>% 
+  mutate(auth_aff_addr1=str_replace_all(auth_aff_addr, auth_ctry1, ""),
+         auth_ctry2=str_extract(auth_aff_addr1,paste(country$Country,collapse="|")),
+         auth_ctry2 =ifelse(grepl("Bogor Agricultural University",auth_aff_addr1),"Indonesia",auth_ctry2),
+         auth_ctry2 =ifelse(grepl("Vietnam Forestry University",auth_aff_addr1),"Viet Nam",auth_ctry2),
+         auth_ctry2 =ifelse(grepl("Univer-\r\nsity of York",auth_aff_addr1),"United Kingdom",auth_ctry2),
+         auth_ctry2 =ifelse(grepl("Centro Intercul",auth_aff_addr1),"Mexico",auth_ctry2),
+         auth_ctry2=ifelse(auth_ctry2==auth_ctry1,"",auth_ctry2)) %>% 
+         select(-auth_aff_addr1)
+
+rm(unwanted.var,USnames,UKnames,CANnames)
 ```
 ### Basic plot functions (for next chunk of plots)
 ```{r eval=T}
@@ -202,6 +241,7 @@ ste_hist <- function () {
 ### Study-level plots
 Intervention properties, study design, etc.
 ```{r eval=T}
+# --------- Study information 
 #Percent excluded
 (pExclude <- ext.table %>% 
     rename(aid='Data_extraction_questionnaire.01_Article_ID',
@@ -217,7 +257,7 @@ Intervention properties, study design, etc.
 
 # Publication year
 table(data$Pub_year)
-summary(data$Pub_year)
+summary(data %>% group_by(aid,Pub_year) %>% summarise())
 minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
 (pPubyr<- data %>% 
     group_by(aid,Pub_year) %>% 
@@ -234,71 +274,29 @@ data %>% group_by(Pub_type) %>% summarise(num=n_distinct(aid), pct=num/75)
   xlab("Publication type"))
 
 # Author affliation
-data %>% group_by(auth_aff) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(auth_aff) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(desc(num))
 (pAuth_aff<-ste_gp(auth_aff) +
   xlab("Author affliation"))
+grep("Affil_type",names(data),value=T)
 data %>% group_by(Affil_type.Academic) %>% summarise(num=n_distinct(aid), pct=num/75)
 data %>% group_by(Affil_type.Research_Institute) %>% summarise(num=n_distinct(aid), pct=num/75)
-data %>% group_by(Affil_type.Academic) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Affil_type.Non_profit) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Affil_type.Public_sector) %>% summarise(num=n_distinct(aid), pct=num/75)
+data %>% group_by(Affil_type.International_Organization) %>% summarise(num=n_distinct(aid), pct=num/75)
 
-# Intervention type
-data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=num/75)
-(55+9)/75
-(pInt_typ<-ste_gp(Int_type) +
-  xlab("Intervention type"))
 
-int.type <- data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=paste0("(",round((num/75)*100)," %)")) %>% 
-              unite("Intervention",Int_type,pct, sep=" ") %>% arrange (-num)
-(pInt_typ.waffle <- waffle(int.type, rows = 7, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
-(pInt_typ.waffle <- waffle(int.type, rows = 8, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
 
-# Intervention scale
-data %>% group_by(int_scale) %>% summarise(num=n_distinct(aid), pct=num/75)
-(pInt_scale<-ste_gp(int_scale) +
-  xlab("Intervention scale"))
-
-# Type of study
-data %>% group_by(Study_type) %>% summarise(num=n_distinct(aid), pct=num/75)
-(pStudy_typ<-ste_gp(Study_type) +
-  xlab("Study type"))
-
-# Study data source
-data %>% group_by(Data_source) %>% summarise(num=n_distinct(aid), pct=num/75)
-(pStdy_source<-ste_gp(Data_source) +
-  xlab("Study data source"))
-
-# Study scale
-data %>% group_by(stdy_scl) %>% summarise(n_distinct(aid))
-(pStdy_scl<-ste_gp(stdy_scl) +
-  xlab("Study scale"))
-
-# Control group
-data %>% group_by(Design.control_comp) %>% summarise(n_distinct(aid))
-(pCtrl_gp<-ste_gp(Design.control_comp) +
-  xlab("Control group"))
-
-# Control group type
-data %>% group_by(Comp_type) %>% summarise(num=n_distinct(aid), pct=num/75)
-(pCtrl_typ<-ste_gp(Comp_type) +
-  xlab("Control group type"))
-
-# Biome
-data %>% group_by(Biome.) %>% summarise(n_distinct(aid))
-(pBiome<-ste_gp(Biome.) +
-  xlab("Biome"))
-Biome <- data %>% group_by(Biome.) %>% summarise(num=n_distinct(aid), pct=num/75) %>% 
-  mutate (coral=ifelse(grepl("coral",Biome.),1,0)) 
-sum(Biome$pct[Biome$coral==1])
-
-# Country (values by study)
-country <- import(paste0(datadir,"allcountries.csv"))
+# --------- Intervention general information
+# Country/Region (values per study: i.e. x% of studies where in this region )
+# FYI: Study_country=Int_location
 ctry <- data %>% group_by(aid,Study_country) %>%  summarise(n_distinct(aid)) %>%
         left_join(country,by=c("Study_country"="Country")) %>% 
-  # quick fix for NAs
-        mutate(Region=ifelse(aid==67396,"Latin America",Region),Subregion=ifelse(aid==67396,"Caribbean",Subregion),
+  # quick fix for NAs, multi-country studies
+        mutate(Region=ifelse(aid==67396,"Latin America",Region),Subregion=ifelse(aid==67396,"Caribbean & Central America",Subregion),
                Region=ifelse(aid==67550,"Northern America",Region),Subregion=ifelse(aid==67550,"Northern & Central America",Subregion),
                Region=ifelse(aid==68668,"Asia",Region),Subregion=ifelse(aid==68668,"South-Eastern Asia",Subregion))
 ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(-pct)
+ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(-pct) %>% filter(grepl("Central America",Subregion))
 
 (pSubRegion<-  ctry %>%
     group_by(Subregion,Region) %>% 
@@ -309,34 +307,93 @@ ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% 
     xlab("Sub-Region") +
     coord_flip())
 
-# Country (values by country)
+# Num of countries
 ctry <- data %>%
   mutate(Study_country=gsub(",",";",Study_country),
          Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
          Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
   group_by(aid,Study_country) %>%
   summarise()
-ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE))) 
-names(ctry) <- 'ctry'
-ctry_sum <-ctry %>% 
-  mutate(ctry=as.character(ctry)) %>% 
-  group_by(ctry) %>% 
-  count() %>% 
+ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
+ names(ctry) <- 'ctry'
+ctry_sum <-ctry %>%
+  mutate(ctry=as.character(ctry)) %>%
+  group_by(ctry) %>%
+  count() %>%
   left_join(country,by=c("ctry"="Country"))
-#head(ctry_sum)
+nrow(ctry_sum) # number of unique countries
+head(ctry_sum)
 
-ctry_sum %>% group_by(Subregion) %>% summarise(num=sum(n), pct=num/75)
+# Country (values by country: i.e. x% of countries assessed where in this region )
+# ctry_sum %>% group_by(Subregion) %>% summarise(num=sum(n), pct=num/75)
+# (pSubRegion<-  ctry_sum %>%
+#     filter(!is.na(n)) %>% 
+#     group_by(Subregion) %>% 
+#     summarise(num=sum(n)) %>% 
+#     arrange(-num) %>% 
+#     mutate(x.labels=ordered(Subregion)) %>% 
+#     ggplot(aes(x=reorder(x.labels,num),y=num))+
+#     geom_bar(stat='identity', fill='blue', width = 1) +
+#     xlab("Sub-Region") +
+#     coord_flip())
 
-(pSubRegion<-  ctry_sum %>%
-    filter(!is.na(n)) %>% 
-    group_by(Subregion) %>% 
-    summarise(num=sum(n)) %>% 
-    arrange(-num) %>% 
-    mutate(x.labels=ordered(Subregion)) %>% 
-    ggplot(aes(x=reorder(x.labels,num),y=num))+
-    geom_bar(stat='identity', fill='blue', width = 1) +
-    xlab("Sub-Region") +
-    coord_flip())
+# Biome
+data %>% group_by(Biome.) %>% summarise(num=n_distinct(aid), pct=num/75) %>%  arrange(desc(num))
+(pBiome<-ste_gp(Biome.) +
+  xlab("Biome"))
+Biome <- data %>% group_by(Biome.) %>% summarise(num=n_distinct(aid), pct=num/75) %>% 
+  mutate (coral=ifelse(grepl("coral",Biome.),1,0)) 
+sum(Biome$pct[Biome$coral==1])
+
+# Intervention type
+data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=num/75)
+(55+9)/75
+(pInt_typ<-ste_gp(Int_type) +
+  xlab("Intervention type"))
+
+int.type <- data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=paste0("(",round((num/75)*100)," %)")) %>% 
+              unite("Intervention",Int_type,pct, sep=" ") %>% arrange (-num)
+(pInt_typ.waffle <- waffle(int.type, rows = 7, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
+
+# Intervention scale
+data %>% group_by(int_scale) %>% summarise(num=n_distinct(aid), pct=num/75)
+(pInt_scale<-ste_gp(int_scale) +
+  xlab("Intervention scale"))
+# Study scale
+data %>% group_by(stdy_scl) %>% summarise(num=n_distinct(aid), pct=num/75)
+(pStdy_scl<-ste_gp(stdy_scl) +
+  xlab("Study scale"))
+
+
+# Age and size
+unique(data$Int_dur)
+int.area <- as.data.frame(unique(data$Int_area)) %>% 
+  mutate(unit="unknown",
+         unit= ifelse(grepl("ha",unique(data$Int_area)),"ha",unit),
+         unit= ifelse(grepl("km",unique(data$Int_area)),"sqkm",unit),
+         unit= ifelse(grepl("mi",unique(data$Int_area)),"sqmi",unit),
+         unit= ifelse(grepl("nautical miles",unique(data$Int_area)),"sqnmi",unit))
+# gsub("[^0-9]", "", unique(data$Int_area)) 
+
+ #--- Study design
+# Type of study
+data %>% group_by(Study_type) %>% summarise(num=n_distinct(aid), pct=num/75)
+(pStudy_typ<-ste_gp(Study_type) +
+  xlab("Study type"))
+
+# Study data source
+data %>% group_by(Data_source) %>% summarise(num=n_distinct(aid), pct=num/75)
+(pStdy_source<-ste_gp(Data_source) +
+  xlab("Study data source"))
+# Control group
+data %>% group_by(Design.control_comp) %>% summarise(n_distinct(aid))
+(pCtrl_gp<-ste_gp(Design.control_comp) +
+  xlab("Control group"))
+
+# Control group type
+data %>% group_by(Comp_type) %>% summarise(num=n_distinct(aid), pct=num/75)
+(pCtrl_typ<-ste_gp(Comp_type) +
+  xlab("Control group type"))
 
 ## Grouped plots
 # About study
@@ -344,21 +401,46 @@ plot_grid(pExclude,pPubyr,pPubtype,pAuth_aff,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 
 # About intervention
-plot_grid(pInt_typ,pInt_scale
+plot_grid(pInt_scale,pSubRegion
           ,labels=letters[1:4], ncol = 2, nrow = 1, hjust=-1)
 
-# About study
+# About study design
 plot_grid(pStudy_typ,pStdy_source,pStdy_scl,pCtrl_gp,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ```
 
 ### Outcome-level plots
 ```{r eval=T}
-# Outcome domain
+# Outcome domain 
+data %>% group_by(Out_type) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(desc(num))
 (pOut_domain <- ste_gp_o('Out_type') %>% 
 ggplot(aes(x=reorder(Out_type,num),y=num))+
   ste_hist() +
   xlab('Outcome domain'))
+
+# Outcome sub-domains
+ # find out the max # subtypes per row for separation
+ max.subtypes <- paste0("o.sub",rep(1:max(str_count(data$Out_subtype, ",")+1)))
+ outcomes2 <-data %>% 
+   select(aid,oid,Int_type,Out_type,Out_subtype) %>% 
+   separate(Out_subtype,max.subtypes, sep=", ",fill="right") %>% # fill=right fills blanks with NAs
+   gather("X","Out_subtype", max.subtypes) %>% 
+   filter(!is.na(Out_subtype)) %>% 
+   select(-X) %>% 
+   group_by(Int_type,Out_type,Out_subtype) %>% 
+   count()
+outcomes2 %>% group_by(Out_subtype) %>% summarise(num=sum(n), pct=num/75) %>% arrange(desc(num))
+
+  # CPUE and food security
+cpue.terms <-   c(grep("catch",data$Indicators,value=T), grep("PUE",data$Indicators,value=T,ignore.case = F),
+                  grep("increased sizes of species",data$Indicators,value=T,ignore.case = F))
+unique(data$Indicators[data$Indicators%in%cpue.terms & grepl("food security",data$Out_subtype)])
+data$Indicators[!data$Indicators%in%cpue.terms & grepl("food security",data$Out_subtype)]
+data <- data %>% 
+   mutate(cpue =ifelse(Indicators%in%cpue.terms & grepl("food security",Out_subtype),1,0))
+sum(data$cpue)
+length(grep("food security",data$Out_subtype,value=T))
+data %>% filter(grepl("food security",Out_subtype)) %>% group_by(cpue) %>% summarise(num=n_distinct(aid), pct=num/24) %>% arrange(desc(num))
 
 # Data type
 table(data$Outcome.data_type)/sum(!is.na(data$Outcome.data_type))
@@ -607,38 +689,139 @@ heat.map.int
 I can't seem to get the fortify function to work on my system with Sam's map so using broom::tidy.Need to verify
 ```{r eval=T}
 # Summarise data by country 
+
+# fix data in country column
 ctry <- data %>%
   mutate(Study_country=gsub(",",";",Study_country),
          Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
          Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
   group_by(aid,Study_country) %>%
   summarise()
-ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
-names(ctry) <- 'ctry'
+
+max.ctry <- paste0("ctry",rep(1:max(str_count(ctry$Study_country, ";")+1))) # create vector of column names for each country
 ctry_sum <-ctry %>% 
-  mutate(ctry=as.character(ctry)) %>% 
-  group_by(ctry) %>% 
-  add_count()  
-head(ctry_sum)
+  separate(Study_country,max.ctry, sep="; ",fill="right") %>% # fill=right fills blanks with NAs
+  gather("X","Country", max.ctry) %>% 
+  filter(!is.na(Country)) %>% 
+  select(-X) %>% 
+  group_by(Country) %>% 
+  count() 
+
+#arrange(ctry_sum,desc(n))
+#ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
+#names(ctry) <- 'ctry'
+# ctry_sum <-ctry %>% 
+#   mutate(ctry=as.character(ctry)) %>% 
+#   group_by(ctry) %>% 
+#   add_count()  
+# head(ctry_sum1)
 
 #load in full country list
-country <- import(paste0(datadir,"allcountries.csv")) %>% 
-  left_join(ctry_sum,by=c("Country"="ctry")) %>%
+ctry_sum1 <- country %>% 
+  left_join(ctry_sum,by="Country") %>%
   mutate(n=replace(n, is.na(n), 0)) 
 
-ctry_sum$ctry[!ctry_sum$ctry%in%country$Country] # any missing?
+ctry_sum$Country[!ctry_sum$Country%in%ctry_sum1$Country] # any missing?
 
 # read in map
 map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 map <-broom::tidy(map,region="ISO3")
 #map@data[map@data$NAME=="Turks and Caicos Islands",]
 #plot
-(study_map <- ggplot() +
-  geom_map(data=country, aes(map_id=code, fill=n),map=map) +
+(study_ctry_map <- ggplot() +
+  geom_map(data=ctry_sum1, aes(map_id=code, fill=n),map=map) +
   expand_limits(x=map$long,y=map$lat) +
   theme(panel.background = element_rect(fill = "#525252", colour = "#525252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
   scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
-                       midpoint=(max(country$n)/2),limits=c(0,max(country$n))))
+                       midpoint=(max(ctry_sum1$n)/2),limits=c(0,max(ctry_sum1$n))))
+
+
+#--------------------- Author institution country
+auth_ctry_sum <-data %>% 
+  gather("X","Country", auth_ctry1:auth_ctry2) %>% 
+  filter(!is.na(Country)) %>% 
+  select(-X) %>% 
+  group_by(Country) %>% 
+  count() 
+
+
+#load in full country list
+auth_ctry_sum1 <- country %>% 
+  left_join(auth_ctry_sum,by="Country") %>%
+  mutate(n=replace(n, is.na(n), 0)) 
+
+auth_ctry_sum$Country[!auth_ctry_sum$Country%in%auth_ctry_sum1$Country] # any missing?
+
+# read in map
+map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+map <-broom::tidy(map,region="ISO3")
+#map@data[map@data$NAME=="Turks and Caicos Islands",]
+#plot
+(auth_ctry_map <- ggplot() +
+  geom_map(data=auth_ctry_sum1, aes(map_id=code, fill=n),map=map) +
+  expand_limits(x=map$long,y=map$lat) +
+  theme(panel.background = element_rect(fill = "#525252", colour = "#525252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
+                       midpoint=(max(auth_ctry_sum1$n)/2),limits=c(0,max(auth_ctry_sum1$n))))
+
+
+#--------------- Connections (https://www.gis-blog.com/flight-connection-map-with-r/)
+# fix data in country column
+# test <- data %>%
+#   mutate(Study_country=gsub(",",";",Study_country),
+#          Study_country=gsub("Tanzania; United Republic Of","Tanzania, United Republic Of",Study_country),
+#          Study_country=gsub("Taiwan; Province Of China","Taiwan, Province Of China",Study_country)) %>%
+#   group_by(aid,auth_ctry1,Study_country) %>%
+#   summarise()
+# head(test1)
+# 
+# max.ctry <- paste0("ctry",rep(1:max(str_count(test$Study_country, ";")+1))) # create vector of column names for each country
+# test1 <-test %>% 
+#   separate(Study_country,max.ctry, sep="; ",fill="right") %>% # fill=right fills blanks with NAs
+#   gather("X","Country", max.ctry) %>% 
+#   filter(!is.na(Country)) %>% 
+#   select(-X) %>% 
+#   group_by(auth_ctry1,Country) %>% 
+#   count() %>% 
+#   rename(stdy_ctry="Country")
+# 
+# 
+# #load in full country list
+# test2 <- country %>% 
+#   left_join(test1,by=c("Country"="stdy_ctry")) %>%
+#   mutate(n=replace(n, is.na(n), 0)) %>% 
+#   rename(stdy_code="Country")
+# 
+# head(test2)
+# test1$Country[!test1$Country%in%test2$Country] # any missing?
+# 
+# # read in map
+# map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+# map <- st_read(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+# map.pts <- st_centroid(map) %>% 
+#   left_join(test2,by=c("ISO3"="code")) 
+# head(map.pts)
+# plot(st_geometry(map))
+# plot(st_geometry(map.pts),add=T)
+# 
+# for (i in (1:nrow(map.pts))) { 
+# inter <- gcIntermediate(c(jfk$LON[1], jfk$LON[1]), c(usairports$lon[i], usairports$lat[i]), n=200)
+# lines(inter, lwd=0.1, col="turquoise2")    
+# }
+# 
+# 
+# 
+# #map@data[map@data$NAME=="Turks and Caicos Islands",]
+# #plot
+# (study_ctry_map <- ggplot() +
+#   geom_map(data=test2, aes(map_id=code, fill=n),map=map.test) +
+#   expand_limits(x=map.test$long,y=map.test$lat) +
+#   theme(panel.background = element_rect(fill = "#525252", colour = "#525252"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+#   scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
+#                        midpoint=(max(test2$n)/2),limits=c(0,max(test2$n))))
+# 
+#   
+
 
 #load in full country list
 # country <- read.csv(paste0(datadir,"allcountries.csv"), head=TRUE, sep=",")
@@ -885,9 +1068,9 @@ mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
 ### Treemapping
 ```{r eval=T}
 #Treemapping to look at outcome subtypes within outcome domains
-outcomes <- select(data,aid,oid,Int_type,Out_type,Out_subtype)
+
 # find out the max # subtypes per row for separation
-max.subtypes <- paste0("o.sub",rep(1:max(str_count(outcomes$Out_subtype, ",")+1))) 
+max.subtypes <- paste0("o.sub",rep(1:max(str_count(data$Out_subtype, ",")+1))) 
 outcomes2 <-data %>% 
   select(aid,oid,Int_type,Out_type,Out_subtype) %>% 
   separate(Out_subtype,max.subtypes, sep=", ",fill="right") %>% # fill=right fills blanks with NAs
@@ -896,8 +1079,10 @@ outcomes2 <-data %>%
   select(-X) %>% 
   group_by(Int_type,Out_type,Out_subtype) %>% 
   count()
-
+outcomes2 %>% group_by(Out_subtype) %>% summarise(num=sum(n), pct=num/75) %>% arrange(desc(num))
+sum(outcomes2$n)
 head(outcomes2)
+
 export(outcomes2 %>% spread(Int_type,n),
        paste0(outputdir,"outcome subtypes by intervention.csv"))
 
@@ -1198,7 +1383,7 @@ plot_grid(pPubyr,pPubtype,pAuth_aff,
           labels=letters[1:3], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE pub info.jpg'),width = 10.5,height = 6)
 ## about intervention
-plot_grid(pInt_typ,pInt_scale,pBiome
+plot_grid(pInt_typ,pInt_scale,pSubRegion
           ,labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE intervention info.jpg'),width = 14,height = 9)
 pInt_typ.waffle 
@@ -1223,10 +1408,20 @@ ggsave(paste0(outputdir,'study design.jpg'),width = 7,height = 5)
 #   theme(axis.text=element_text(size=14),axis.title=element_text(size=14,face="bold"))
 # ggsave(paste0(outputdir,'study design2.jpg'),width = 4,height = 4)
 
-#-- World map
+#-- World maps
 png(file=paste0(outputdir,"STE_Country_Map_dark.png"), width=13.5, height=8, res=600, units = "in")
 #pdf(file=paste0(outputdir,"STE_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
-study_map
+study_ctry_map
+dev.off()
+
+png(file=paste0(outputdir,"Auth_Country_Map_dark.png"), width=13.5, height=8, res=600, units = "in")
+#pdf(file=paste0(outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+auth_ctry_map
+dev.off()
+
+png(file=paste0(outputdir,"Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
+#pdf(file=paste0(outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+plot_grid(study_ctry_map,auth_ctry_map,labels=letters[1:4], ncol = 1, nrow = 2, hjust=-1)
 dev.off()
 
 #-- Heat maps
