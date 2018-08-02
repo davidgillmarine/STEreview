@@ -429,12 +429,12 @@ ggplot(aes(x=reorder(Out_type,num),y=num))+
  # find out the max # subtypes per row for separation
  max.subtypes <- paste0("o.sub",rep(1:max(str_count(data$Out_subtype, ",")+1)))
  outcomes2 <-data %>% 
-   select(aid,oid,Int_type,Out_type,Out_subtype) %>% 
+   select(aid,oid,Out_type,Out_subtype) %>% 
    separate(Out_subtype,max.subtypes, sep=", ",fill="right") %>% # fill=right fills blanks with NAs
    gather("X","Out_subtype", max.subtypes) %>% 
    filter(!is.na(Out_subtype)) %>% 
    select(-X) %>% 
-   group_by(Int_type,Out_type,Out_subtype) %>% 
+   group_by(Out_type,Out_subtype) %>% 
    count()
 outcomes2 %>% group_by(Out_subtype) %>% summarise(num=sum(n), pct=num/75) %>% arrange(desc(num))
 
@@ -1095,7 +1095,7 @@ outcomes2 <-data %>%
   filter(!is.na(Out_subtype)) %>% 
   select(-X) %>% 
   group_by(Int_type,Out_type,Out_subtype) %>% 
-  count()
+  count(aid)
 outcomes2 %>% group_by(Out_subtype) %>% summarise(num=sum(n), pct=num/75) %>% arrange(desc(num))
 sum(outcomes2$n)
 head(outcomes2)
