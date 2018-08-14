@@ -27,6 +27,7 @@ library(rio)
 library(circlize)
 library(waffle)
 library(sf)
+library(cowplot)
 library(ggplot2)
 library(tidyverse)
 
@@ -207,9 +208,9 @@ data <- data %>%
          select(-auth_aff_addr1)
 
 rm(unwanted.var,USnames,UKnames,CANnames)
-```
-### Basic plot functions (for next chunk of plots)
-```{r eval=T}
+
+###------ Basic plot functions (for next chunk of plots)
+
 # article level stats
  ste_gp <- function (z) {
   enquo_z <- enquo(z)  # measurement variable
@@ -288,25 +289,33 @@ data %>% group_by(Affil_type.Non_profit) %>% summarise(num=n_distinct(aid), pct=
 data %>% group_by(Affil_type.Public_sector) %>% summarise(num=n_distinct(aid), pct=num/75)
 data %>% group_by(Affil_type.International_Organization) %>% summarise(num=n_distinct(aid), pct=num/75)
 
-data %>% group_by(auth_ctry1) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(desc(num)) %>% mutate(pct_sum=cumsum(pct))
+#Author country
+auth_ctry_sum <-data %>% 
+  gather("X","Country", auth_ctry1:auth_ctry2) %>% 
+  filter(!is.na(Country)) %>% 
+  select(-X) %>% 
+  group_by(Country) %>% 
+  summarise(n=n_distinct(aid), pct=n/75) %>% 
+  arrange(desc(pct))
+auth_ctry_sum
 
-(pAuth_ctry<-ste_gp(auth_ctry1) +
-  xlab("Author institution location"))
 
 # --------- Intervention general information
-# Country/Region (values per study: i.e. x% of studies where in this region )
+# Country/Region (values per study: i.e. x% of studies where in this region)
 # FYI: Study_country=Int_location
-ctry <- data %>% group_by(aid,Study_country) %>%  summarise(n_distinct(aid)) %>%
+ctry <- data %>% group_by(aid,Study_country) %>%  summarise() %>%
         left_join(country,by=c("Study_country"="Country")) %>% 
   # quick fix for NAs, multi-country studies
         mutate(Region=ifelse(aid==67396,"Latin America",Region),Subregion=ifelse(aid==67396,"Caribbean & Central America",Subregion),
                Region=ifelse(aid==67550,"Northern America",Region),Subregion=ifelse(aid==67550,"Northern & Central America",Subregion),
                Region=ifelse(aid==68668,"Asia",Region),Subregion=ifelse(aid==68668,"South-Eastern Asia",Subregion))
+
+# number of sub-regions
 ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(-pct)
 ctry %>% group_by(Subregion) %>% summarise(num=n_distinct(aid), pct=num/75) %>% arrange(-pct) %>% filter(grepl("Central America",Subregion))
 
 (pSubRegion<-  ctry %>%
-    group_by(Subregion,Region) %>% 
+    group_by(Subregion) %>% 
     summarise(num=n_distinct(aid)) %>% 
     mutate(x.labels=ordered(Subregion)) %>% 
     ggplot(aes(x=reorder(x.labels,num),y=num))+
@@ -354,10 +363,11 @@ sum(Biome$pct[Biome$coral==1])
 
 # Intervention type
 data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=num/75)
-(55+9)/75
+data %>% mutate (Int_type=ifelse(grepl("MPA",Int_type),"MPA",Int_type)) %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=num/75) 
 (pInt_typ<-ste_gp(Int_type) +
   xlab("Intervention type"))
 
+  # waffle plot
 int.type <- data %>% group_by(Int_type) %>% summarise(num=n_distinct(aid), pct=paste0("(",round((num/75)*100)," %)")) %>% 
               unite("Intervention",Int_type,pct, sep=" ") %>% arrange (-num)
 (pInt_typ.waffle <- waffle(int.type, rows = 7, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
@@ -370,7 +380,6 @@ data %>% group_by(int_scale) %>% summarise(num=n_distinct(aid), pct=num/75)
 data %>% group_by(stdy_scl) %>% summarise(num=n_distinct(aid), pct=num/75)
 (pStdy_scl<-ste_gp(stdy_scl) +
   xlab("Study scale"))
-
 
 # Age and size
 unique(data$Int_dur)
@@ -466,6 +475,70 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
   ste_hist() +
   xlab("Data 'observer'")+ ylab("# cases"))
 
+# order.gp <- data %>% group_by(Out_type) %>% summarise(n=n_distinct(oid)) %>% arrange(desc(n)) %>% pull(Out_type)
+## Perceptions and data type
+(pDataobs.type <- data %>% 
+          group_by(outcome_obs1,Outcome.data_type) %>% 
+          summarise(n=n_distinct(oid)) %>% 
+          ggplot(aes(x=Outcome.data_type,y=n)) +
+          geom_bar(aes(fill = outcome_obs1),stat = 'identity') +
+          scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
+          labs(x="Data type", y="# outcomes", fill="Data observer") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+(pDatatyp.stdytype <- data %>%
+          group_by(Outcome.data_type,Study_type) %>%
+          summarise(n=n_distinct(oid)) %>%
+          ggplot(aes(x=Study_type,y=n)) +
+          geom_bar(aes(fill = Outcome.data_type),stat = 'identity') +
+          scale_fill_manual(values = c("skyblue1", "lightblue","blue", "darkblue")) +
+          labs(x="Study type", y="# outcomes", fill="Outcome data type") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+(pDataobs.stdytype <- data %>% 
+          group_by(outcome_obs1,Study_type) %>% 
+          summarise(n=n_distinct(oid)) %>% 
+          ggplot(aes(x=Study_type,y=n)) +
+          geom_bar(aes(fill = outcome_obs1),stat = 'identity') +
+          scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
+          labs(x="Study type", y="# outcomes", fill="Data observer") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+(pOut_type.stdytype <- data %>% 
+          group_by(Out_type,Study_type) %>% 
+          summarise(n=n_distinct(oid)) %>% 
+          ggplot(aes(x=Out_type,y=n)) +
+          geom_bar(aes(fill = Study_type),stat = 'identity') +
+          scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
+          labs(x="Outcome type", y="# outcomes", fill="Study type") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+(pOut_type.dataobs <- data %>% 
+          group_by(Out_type,outcome_obs1) %>% 
+          summarise(n=n_distinct(oid)) %>% 
+          ggplot(aes(x=Out_type,y=n)) +
+          geom_bar(aes(fill = outcome_obs1),stat = 'identity') +
+          scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
+          labs(x="Outcome type", y="# outcomes", fill="Data observer") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+(pOut_type.datatyp <- data %>% 
+          group_by(Out_type,Outcome.data_type) %>% 
+          summarise(n=n_distinct(oid)) %>% 
+          ggplot(aes(x=Out_type,y=n)) +
+          geom_bar(aes(fill = Outcome.data_type),stat = 'identity') +
+          scale_fill_manual(values = c("skyblue1", "lightblue","blue", "darkblue")) +
+          labs(x="Outcome type", y="# outcomes", fill="Data type") +
+          coord_flip() +
+          theme_bw() +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+
+
 # Dimensions
 ste.data <- data %>% 
   select(STE_domain:STE_temporal_scale)
@@ -480,7 +553,7 @@ ste.data1$var <- gsub('STE_','',row.names(ste.data1))
 
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
-
+minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
 
          
 # Demographic groups
@@ -1298,7 +1371,7 @@ Still need to figure out other graphs over time:
 #   ggtitle('Groups')+ylim(c(0,80)) )
 #  # direct.label(pSTE_time_gps,list(cex=1.5, "last.qp"))
  
-# Growth by intervention
+#- Growth by intervention
 All_time_gps <- data %>%
   group_by(Pub_year) %>% 
   summarise(pub.per.yr= n_distinct(aid)) %>% 
@@ -1308,6 +1381,15 @@ All_time_gps <- data %>%
          gp="All") %>% 
     select(Pub_year,gp,val)
 tail(All_time_gps)
+# growth by decade
+#overall
+(max(All_time_gps$val)-min(All_time_gps$val))/(max(All_time_gps$Pub_year)-min(All_time_gps$Pub_year))
+#1990s
+(max(All_time_gps$val[All_time_gps$Pub_year<2000])-max(All_time_gps$val[All_time_gps$Pub_year<1990]))/10
+#2000s
+(max(All_time_gps$val[All_time_gps$Pub_year<2010])-max(All_time_gps$val[All_time_gps$Pub_year<2000]))/10
+#2000-latest date
+(max(All_time_gps$val)-max(All_time_gps$val[All_time_gps$Pub_year<2010]))/(max(All_time_gps$Pub_year)-2009)
 
 Int_time_gps <-  data %>%
   group_by(Pub_year,Int_type) %>% 
@@ -1326,27 +1408,14 @@ Int_time_gps <- Int_time_gps %>%
   mutate(int_typ = factor(int_typ, levels = order.gp)) %>% 
   rename(Intervention=int_typ)
 
+int.cols <- c("black","blue","orangered1","yellow4","tan1")
+names(int.cols) <- order.gp
+
 (pInt_time_gps <- ggplot(Int_time_gps)  + 
   geom_line(aes(x = Pub_year, y = val, group = Intervention, colour = Intervention), size = 1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  scale_colour_manual(values=int.cols) +
   ggtitle('Intervention type')+ylim(c(0,60)))
-
-#- Growth by STE (demographic group)
-STE_time_demog <- STE_time %>%
-  select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_sex,STE_social) %>%
-  gather("STE_gp","val",STE_age:STE_social) %>% 
-  mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
-  bind_rows(All_time_gps %>% rename(STE_gp=gp))
-# non-elegant way to convert units to factor in order to reorder plot legends
-order.gp <- STE_time_demog %>% group_by(STE_gp) %>% summarise(order_typ=max(val)) %>% arrange(desc(order_typ)) %>% pull(STE_gp)
-STE_time_demog <- STE_time_demog %>%  
-  mutate(STE_gp = factor(STE_gp, levels = order.gp)) %>% 
-  rename(Group=STE_gp)
-
-(pSTE_time_demog <-  ggplot(STE_time_demog)  + 
-  geom_line(aes(x = Pub_year, y = val, group = Group, colour = Group),size=1.3)  +
-  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
-  ggtitle('Demographic groups')+ylim(c(0,60)))
 
 #- Growth by domain
 STE_time_dom <-  data %>%
@@ -1367,10 +1436,47 @@ STE_time_dom <- STE_time_dom %>%
   mutate(out_typ = factor(out_typ, levels = order.gp)) %>%
   rename(Outcome_type=out_typ)
 
+dom.cols <- c("black","blue","orangered1","yellow4","tan1","violet","palegreen3")
+names(dom.cols) <- order.gp
+
 (pSTE_time_dom <- ggplot(STE_time_dom)  + 
   geom_line(aes(x = Pub_year, y = val, group = Outcome_type, colour = Outcome_type),size=1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  scale_colour_manual(values=dom.cols) +
   ggtitle('Domain')+ylim(c(0,60)) )
+
+#- Growth by STE (demographic group)
+STE_time <-  data %>%
+  select(aid,Pub_year,STE_domain:STE_temporal_scale) %>%
+  gather("STE_type","val",STE_domain:STE_temporal_scale) %>%
+  filter(!is.na(val)) %>%
+  group_by(Pub_year,STE_type) %>%
+  summarise(ste_per_yr= n_distinct(aid)) %>%
+  spread(STE_type,value = ste_per_yr) %>%
+  mutate_at(vars(STE_age:STE_temporal_unit),funs(replace(., is.na(.), 0))) %>%
+  ungroup() %>%
+  arrange(Pub_year) %>%
+  mutate_at(vars(STE_age:STE_temporal_unit),funs(cumsum(.)))
+
+STE_time_demog <- STE_time %>%
+  select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_sex,STE_social) %>%
+  gather("STE_gp","val",STE_age:STE_social) %>% 
+  mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
+  bind_rows(All_time_gps %>% rename(STE_gp=gp))
+  # non-elegant way to convert units to factor in order to reorder plot legends
+order.gp <- STE_time_demog %>% group_by(STE_gp) %>% summarise(order_typ=max(val)) %>% arrange(desc(order_typ)) %>% pull(STE_gp)
+STE_time_demog <- STE_time_demog %>%  
+  mutate(STE_gp = factor(STE_gp, levels = order.gp)) %>% 
+  rename(Group=STE_gp)
+
+ste.cols <- c("black","blue","orangered1","yellow4","tan1","violet","palegreen3")
+names(ste.cols) <- order.gp
+
+(pSTE_time_demog <-  ggplot(STE_time_demog)  + 
+  geom_line(aes(x = Pub_year, y = val, group = Group, colour = Group),size=1.3)  +
+  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  scale_colour_manual(values=ste.cols) +
+  ggtitle('Demographic groups')+ylim(c(0,60)))
 
 #- Growth by scale
 STE_scale_gps <- STE_time %>%
@@ -1386,13 +1492,19 @@ STE_scale_gps <- STE_scale_gps %>%
   mutate(STE_gp = factor(STE_gp, levels = order.gp))%>%
   rename(Scale=STE_gp)
 
+ste.cols <- c("black","blue","orangered1","yellow4")
+names(ste.cols) <- order.gp
+
 (pSTE_scale_gps <- ggplot(STE_scale_gps)  + 
   geom_line(aes(x = Pub_year, y = val, group = Scale, colour = Scale),size=1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  scale_colour_manual(values=ste.cols) +
   ggtitle('Scale')+ylim(c(0,60)) )
 
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+
+# Interventions over time
 
 minyr <- min(data$Pub_year)-1
 maxyr <- max(data$Pub_year)+1
@@ -1405,7 +1517,6 @@ Study_type.lbl <- data %>%
 group.colors <-matrix( c("#02818a","#67a9cf","#084594"),nrow=1)
 names(group.colors) <- Study_type.lbl$x.label
   
-# Interventions over time
 (pStudy_typ_time <- data %>% 
   group_by(Pub_year,Study_type) %>% 
   summarise(num=n_distinct(aid)) %>%
@@ -1444,6 +1555,12 @@ ggsave(paste0(outputdir,'STE study info.jpg'),width = 10.5,height = 6)
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
+## outcomes (stacked)
+plot_grid(pDataobs.type,pDatatyp.stdytype,pDataobs.stdytype,
+          pOut_type.stdytype,pOut_type.datatyp,pOut_type.dataobs,  
+          labels=letters[1:6], 
+          ncol = 3, nrow = 2, hjust=-1)
+ggsave(paste0(outputdir,'STE outcome summaries-stacked.jpg'),width = 14,height = 6)
 # Study design
 plot_grid(pDatatype,pDataobs,pStudy_typ, pCtrl_gp,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
@@ -1600,12 +1717,12 @@ treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         title="CBNRM_MPA")
 dev.off()
 
-# STE over time
-plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
-          pSTE_ethnic,pSTE_age,pSTE_occupation,
-          pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
-          labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
-ggsave(paste0(outputdir,'STE_over_time.jpg'),width = 13,height = 7)
+# # STE over time
+# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
+#           pSTE_ethnic,pSTE_age,pSTE_occupation,
+#           pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
+#           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
+# ggsave(paste0(outputdir,'STE_over_time.jpg'),width = 13,height = 7)
 
 # study growth over time
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
