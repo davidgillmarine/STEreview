@@ -705,6 +705,7 @@ ctry <- data %>%
   group_by(aid,Study_country) %>%
   summarise()
 
+# no. articles per country
 max.ctry <- paste0("ctry",rep(1:max(str_count(ctry$Study_country, ";")+1))) # create vector of column names for each country
 ctry_sum <-ctry %>% 
   separate(Study_country,max.ctry, sep="; ",fill="right") %>% # fill=right fills blanks with NAs
@@ -713,6 +714,7 @@ ctry_sum <-ctry %>%
   select(-X) %>% 
   group_by(Country) %>% 
   count() 
+arrange(ctry_sum,desc(n))
 
 #arrange(ctry_sum,desc(n))
 #ctry <-   as.data.frame(x=unlist(strsplit(as.character(ctry$Study_country),'; ',fixed=TRUE)))
@@ -723,7 +725,7 @@ ctry_sum <-ctry %>%
 #   add_count()  
 # head(ctry_sum1)
 
-#load in full country list
+# join to full country list
 ctry_sum1 <- country %>% 
   left_join(ctry_sum,by="Country") %>%
   mutate(n=replace(n, is.na(n), 0)) 
@@ -743,14 +745,15 @@ map <-broom::tidy(map,region="ISO3")
                        midpoint=(max(ctry_sum1$n)/2),limits=c(0,max(ctry_sum1$n))))
 
 
-#--------------------- Author institution country
+#--------------------- Author institution location (country)
 auth_ctry_sum <-data %>% 
   gather("X","Country", auth_ctry1:auth_ctry2) %>% 
   filter(!is.na(Country)) %>% 
   select(-X) %>% 
   group_by(Country) %>% 
-  count() 
-
+  summarise(n=n_distinct(aid), pct=n/75) %>% 
+  arrange(desc(pct))
+auth_ctry_sum
 
 #load in full country list
 auth_ctry_sum1 <- country %>% 
@@ -835,6 +838,33 @@ inter.sf <- st_as_sf(inter) %>%
   # scale_fill_gradient2(low="black",mid="#2171b5",high="#08519c",
   #                      midpoint=(max(connect2$n)/2),limits=c(0,max(connect2$n))))
 
+
+#--------------- Repeat authors
+# get unique author list
+auth_list <- data %>% 
+  group_by(aid) %>% 
+  summarise(Authors=first(Authors))
+auth_words <- paste(auth_list$Authors, collapse = " ")
+
+stop_words <- c("and") # words to exclude
+
+auth_rpt <-data_frame(text = auth_words) %>% 
+  mutate(text=gsub(" *\\b[[:alpha:]]{1,2}\\b *", " ", text),
+         text = gsub('[[:punct:] ]+',' ',text),
+         text = tolower(text), 
+         tokens = str_split(text, "\\s+")) %>%
+  unnest() %>% 
+  count(tokens) %>% 
+  filter(!tokens %in% stop_words) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  arrange(desc(n))
+
+auth_rpt # Christie and Pollnac the most repeated authors, but only 3 times
+
+
+
+
+#----------------------
 # #create basemap
 # maps::map("world", fill=T, col="grey8", bg="grey15")
 # #overlay source country
