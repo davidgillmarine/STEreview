@@ -611,8 +611,8 @@ io_counts <- data %>%
         group_by(Int_type,Out_type) %>% 
         count() %>% 
         spread(key=Int_type, value=n) %>% 
-        mutate(PES=0) %>%
-        gather("Int_type","n",CBNRM:PES) %>% 
+    #   mutate(PES=0) %>%
+        gather("Int_type","n",CBNRM:MPA) %>% 
         mutate(n=ifelse(is.na(n),0,as.integer(n)))
 
 (heat.map.domain <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
@@ -1585,15 +1585,21 @@ dev.off()
 
 png(file=paste0(outputdir,"Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
 #pdf(file=paste0(outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
-plot_grid(study_ctry_map + labs(title="Study locations"),
-          auth_ctry_map + labs(title="Author insitutions"),labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
+plot_grid(auth_ctry_map + labs(title="Author insitutions"),
+          study_ctry_map + labs(title="Study locations"),labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
 dev.off()
 
 auth_stdy_connect + labs(title="Author insitution:study Site distance")
 ggsave(paste0(outputdir,'auth_stdy_connect.jpg'),width = 10.5,height = 6)
 
 #-- Heat maps
-## all outcomes combined
+## heat maps
+png(file=paste0(outputdir,"Heatmap_articles.png"), width=13.5, height=5, res=600, units = "in")
+plot_grid(heat.map.domain,heat.map.demog, heat.map.scale,labels=letters[1:3], ncol = 3, nrow = 1, hjust=-1)
+dev.off()
+
+## individual maps
+
 png(file=paste0(outputdir,"Int_domain_Heatmap_articles.png"), width=7, height=5, res=600, units = "in")
 # pdf(file=paste0(outputdir,"STE_Int_Outcome_Heatmap_articles_test.pdf"), width=11, height=8.5)
 heat.map.domain
