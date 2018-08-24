@@ -140,7 +140,8 @@ unwanted.var <- grep('(\\d)',names(ext.data),value = T) # variables that still c
 data <- ext.data %>% 
   select(-one_of(unwanted.var)) %>%
   mutate(Comp_type=gsub("Pre-treatment/post-treatment","Pre/post treatment",Comp_type),
-         Int_type=gsub("CBNRM, MPA","CBNRM_MPA",Int_type),
+         Int_type=gsub("CBNRM","CBM",Int_type),
+         Int_type=gsub("CBM, MPA","CBMPA",Int_type),
          Comp_type=ifelse(is.na(Comp_type),'none',Comp_type),
          Affil_type.Academic=ifelse(grepl("Academic",auth_aff),1,0),
          Affil_type.Public_sector=ifelse(grepl("Public",auth_aff),1,0),
@@ -151,7 +152,7 @@ data <- ext.data %>%
          Affil_type.International_Organization=ifelse(grepl("International",auth_aff),1,0),
          Int_type.MPA=ifelse(grepl("MPA",Int_type),1,0),
          Int_type.PES=ifelse(grepl("PES",Int_type),1,0),
-         Int_type.CBNRM=ifelse(grepl("CBNRM",Int_type),1,0),
+         Int_type.CBM=ifelse(grepl("CBM",Int_type),1,0),
          Int_type.Certification=ifelse(grepl("Certification",Int_type),1,0),
          Int_geo.local=ifelse(grepl("Local",int_scale),1,0),
          Int_geo.region=ifelse(grepl("Region",int_scale),1,0),
@@ -572,38 +573,38 @@ plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4],
 minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
 
          
-# Demographic groups
-(pSTE_demo_time <-  data %>%
-  select(aid,Pub_year,STE_econ:STE_occupation) %>% 
-  gather("STE_type","val",STE_econ:STE_occupation) %>% 
-  filter(!is.na(val)) %>% 
-  group_by(Pub_year,STE_type) %>% 
-  summarise(ste_per_yr= n_distinct(aid))  %>% 
-  mutate(STE_type=gsub("STE_","",STE_type)) %>% 
-  ggplot(aes(x=Pub_year,y=ste_per_yr)) +
-  geom_bar(aes(fill = STE_type),stat = 'identity') +
-  scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
-  scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
-
-# Scale groups
-(pSTE_scale_time <-  data %>%
-  select(aid,Pub_year,STE_spatial:STE_temporal_scale) %>% 
-  gather("STE_type","val",STE_spatial:STE_temporal_scale) %>% 
-  filter(!is.na(val)) %>% 
-  group_by(Pub_year,STE_type) %>% 
-  summarise(ste_per_yr= n_distinct(aid))  %>% 
-  mutate(STE_type=gsub("STE_","",STE_type)) %>% 
-  ggplot(aes(x=Pub_year,y=ste_per_yr)) +
-  geom_bar(aes(fill = STE_type),stat = 'identity') +
-  scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
-  scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
+# # Demographic groups
+# (pSTE_demo_time <-  data %>%
+#   select(aid,Pub_year,STE_econ:STE_occupation) %>% 
+#   gather("STE_type","val",STE_econ:STE_occupation) %>% 
+#   filter(!is.na(val)) %>% 
+#   group_by(Pub_year,STE_type) %>% 
+#   summarise(ste_per_yr= n_distinct(aid))  %>% 
+#   mutate(STE_type=gsub("STE_","",STE_type)) %>% 
+#   ggplot(aes(x=Pub_year,y=ste_per_yr)) +
+#   geom_bar(aes(fill = STE_type),stat = 'identity') +
+#   scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
+#   scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
+# 
+# # Scale groups
+# (pSTE_scale_time <-  data %>%
+#   select(aid,Pub_year,STE_spatial:STE_temporal_scale) %>% -
+#   gather("STE_type","val",STE_spatial:STE_temporal_scale) %>% 
+#   filter(!is.na(val)) %>% 
+#   group_by(Pub_year,STE_type) %>% 
+#   summarise(ste_per_yr= n_distinct(aid))  %>% 
+#   mutate(STE_type=gsub("STE_","",STE_type)) %>% 
+#   ggplot(aes(x=Pub_year,y=ste_per_yr)) +
+#   geom_bar(aes(fill = STE_type),stat = 'identity') +
+#   scale_x_continuous("Publication Year", breaks=seq(minyr,maxyr,5)) +
+#   scale_y_continuous("Frequency", breaks=seq(0,10,2)) )
 
 ```
 
 ### Heat maps
 ```{r eval=T}
 # out_type <- c("Economic well-being","Health","Political empowerment","Social capital","Education","Culture")
-# int_type <- c("MPA","PES","CBNRM","CBNRM_MPA","Certification")
+# int_type <- c("MPA","PES","CBM","CBMPA","Certification")
 # 
 # io_counts = matrix(nrow=6, ncol=5)
 # rownames(io_counts) <- out_type
@@ -628,7 +629,7 @@ io_counts <- data %>%
         count() %>% 
         spread(key=Int_type, value=n) %>% 
     #   mutate(PES=0) %>%
-        gather("Int_type","n",CBNRM:MPA) %>% 
+        gather("Int_type","n",CBM:MPA) %>% 
         mutate(n=ifelse(is.na(n),0,as.integer(n)))
 
 (heat.map.domain <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
@@ -725,61 +726,61 @@ is_counts <- data %>%
 # 
 # ste_outcomes3 <- ste_outcomes2 %>% select(-aid)
 
-ste_types <- c("STE_domain","STE_econ","STE_social","STE_sex","STE_ethnic","STE_age","STE_social_org","STE_social_org","STE_spatial","STE_temporal_unit","STE_temporal_scale")
+# ste_types <- c("STE_domain","STE_econ","STE_social","STE_sex","STE_ethnic","STE_age","STE_social_org","STE_social_org","STE_spatial","STE_temporal_unit","STE_temporal_scale")
+# 
+# # matrix <- count(ste_outcomes3,Out_type,Int_type,ste_type)
+# # matrix2 <- matrix %>% ungroup() %>% mutate(Int_type=factor(Int_type, levels=c("MPA","CBM","CBMPA","Certification")))
+# # matrix2$n <- as.numeric(matrix2$n)
+# 
+# ste_outcomes <- data %>% 
+#   select(aid,oid,Int_type,Out_type,STE_domain:STE_temporal_scale) %>% 
+#   distinct() %>% 
+#   gather("ste_type","ste_interaction",STE_domain:STE_temporal_scale) %>% 
+#   arrange(Int_type) %>% 
+#   filter(ste_interaction != "NA") %>% 
+#   distinct() %>% 
+#   filter(!is.na(Out_type)) %>% 
+#   filter(!is.na(Int_type))
+# 
+# n_distinct(ste_outcomes$aid)
+# n_distinct(ste_outcomes$oid)
+# 
+# matrix2 <- ste_outcomes %>% 
+#   select(-aid) %>% 
+#   count(Out_type,Int_type,ste_type) %>% 
+#   ungroup() %>% 
+#   mutate(Int_type=factor(Int_type, levels=c("MPA","CBM","CBMPA","Certification")),
+#          n=as.numeric(n)) 
+# 
+# all_poss <- expand.grid(Out_type=unique(matrix2$Out_type),ste_type=unique(matrix2$ste_type),Int_type=unique(matrix2$Int_type))
+# all_merge <- merge(matrix2,all_poss,by=c("Out_type","ste_type","Int_type"),all=TRUE) %>% arrange(Int_type)
 
-# matrix <- count(ste_outcomes3,Out_type,Int_type,ste_type)
-# matrix2 <- matrix %>% ungroup() %>% mutate(Int_type=factor(Int_type, levels=c("MPA","CBNRM","CBNRM_MPA","Certification")))
-# matrix2$n <- as.numeric(matrix2$n)
-
-ste_outcomes <- data %>% 
-  select(aid,oid,Int_type,Out_type,STE_domain:STE_temporal_scale) %>% 
-  distinct() %>% 
-  gather("ste_type","ste_interaction",STE_domain:STE_temporal_scale) %>% 
-  arrange(Int_type) %>% 
-  filter(ste_interaction != "NA") %>% 
-  distinct() %>% 
-  filter(!is.na(Out_type)) %>% 
-  filter(!is.na(Int_type))
-
-n_distinct(ste_outcomes$aid)
-n_distinct(ste_outcomes$oid)
-
-matrix2 <- ste_outcomes %>% 
-  select(-aid) %>% 
-  count(Out_type,Int_type,ste_type) %>% 
-  ungroup() %>% 
-  mutate(Int_type=factor(Int_type, levels=c("MPA","CBNRM","CBNRM_MPA","Certification")),
-         n=as.numeric(n)) 
-
-all_poss <- expand.grid(Out_type=unique(matrix2$Out_type),ste_type=unique(matrix2$ste_type),Int_type=unique(matrix2$Int_type))
-all_merge <- merge(matrix2,all_poss,by=c("Out_type","ste_type","Int_type"),all=TRUE) %>% arrange(Int_type)
-
-heat.map.int <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) + 
-  geom_tile(color="gray90",size=0.1) +
-  geom_text(aes(label=n, color="white")) +
-  scale_fill_gradient(low="#f7fbff",high="#084594",name="# Cases",na.value="gray90") +
-  coord_equal() +
-  facet_wrap(~Int_type, ncol=3) +
-  labs(x="STE Type",y=NULL,
-       title=paste0("STEs observed in domains of human well-being amongst marine conservation interventions (",
-                    n_distinct(ste_outcomes$oid), " cases in ",n_distinct(ste_outcomes$aid)," articles)")) +
-  theme_tufte(base_family="Helvetica") +
-  theme(plot.title=element_text(hjust=0)) +
-  theme(axis.ticks=element_line(size=0.4)) +
-  theme(axis.text=element_text(size=7)) +
-  theme(panel.border=element_rect(fill=NA,size=0.1)) +
-  theme(strip.text=element_text(hjust=0)) +
-  theme(panel.spacing.x=unit(0.5, "cm")) +
-  theme(panel.spacing.y=unit(0.5, "cm")) +
-  theme(legend.title=element_text(size=6)) +
-  theme(legend.text=element_text(size=6)) +
-  theme(legend.title.align=1) +
-  theme(legend.position="bottom") +
-  theme(legend.key.size=unit(0.2, "cm")) +
-  theme(legend.key.width=unit(1, "cm")) +
-  theme(axis.text.x = element_text(angle=45,hjust=1,size=7))
-
-heat.map.int
+# heat.map.int <- ggplot(all_merge, aes(x=ste_type,y=Out_type,fill=n)) + 
+#   geom_tile(color="gray90",size=0.1) +
+#   geom_text(aes(label=n, color="white")) +
+#   scale_fill_gradient(low="#f7fbff",high="#084594",name="# Cases",na.value="gray90") +
+#   coord_equal() +
+#   facet_wrap(~Int_type, ncol=3) +
+#   labs(x="STE Type",y=NULL,
+#        title=paste0("STEs observed in domains of human well-being amongst marine conservation interventions (",
+#                     n_distinct(ste_outcomes$oid), " cases in ",n_distinct(ste_outcomes$aid)," articles)")) +
+#   theme_tufte(base_family="Helvetica") +
+#   theme(plot.title=element_text(hjust=0)) +
+#   theme(axis.ticks=element_line(size=0.4)) +
+#   theme(axis.text=element_text(size=7)) +
+#   theme(panel.border=element_rect(fill=NA,size=0.1)) +
+#   theme(strip.text=element_text(hjust=0)) +
+#   theme(panel.spacing.x=unit(0.5, "cm")) +
+#   theme(panel.spacing.y=unit(0.5, "cm")) +
+#   theme(legend.title=element_text(size=6)) +
+#   theme(legend.text=element_text(size=6)) +
+#   theme(legend.title.align=1) +
+#   theme(legend.position="bottom") +
+#   theme(legend.key.size=unit(0.2, "cm")) +
+#   theme(legend.key.width=unit(1, "cm")) +
+#   theme(axis.text.x = element_text(angle=45,hjust=1,size=7))
+# 
+# heat.map.int
 ```
 ### Plot world map
 I can't seem to get the fortify function to work on my system with Sam's map so using broom::tidy.Need to verify
@@ -1021,8 +1022,8 @@ auth_rpt # Christie and Pollnac the most repeated authors, but only 3 times
 # # 
 ```
 ### Chord diagram
-No tradeoffs for CBNRM
-Minor error where some combinations are separated as 2 different chords (e.g.CBNRM-both: Social and Political:1, Political and Social: 2) 
+No tradeoffs for CBM
+Minor error where some combinations are separated as 2 different chords (e.g.CBM-both: Social and Political:1, Political and Social: 2) 
 ```{r eval=T}
 ###########################
 ##FOR MPAS
@@ -1114,9 +1115,9 @@ mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
 #dev.off()
 
 ###########################
-## for CBNRM
+## for CBM
 ###########################
-cbnrm_outcomes <- filter(data,Int_type %in% c("CBRNM_MPA","CBNRM")) %>% distinct()
+cbnrm_outcomes <- filter(data,Int_type %in% c("CBRNM_MPA","CBM")) %>% distinct()
 cbnrm.syn <- filter(cbnrm_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
 cbnrm.tradeoff <- filter(cbnrm_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
 cbnrm.both <- filter(cbnrm_outcomes,STE_domain == "Both Syn/Trd")
@@ -1198,7 +1199,7 @@ chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.
 title("Synergies (n=8 articles, x=21 cases)",line=-3.5)
 chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
 title("Both (n=8 articles, x=21 cases)",line=-3.5)
-mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
+mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
 #dev.off()
 ```
 ### Treemapping
@@ -1233,8 +1234,8 @@ outcomes3 <-outcomes2 %>%
     mutate(Out_type_all=paste0(Out_type,"\n (",all_sum,(")")),
            Out_type_int=paste0(Out_type,"\n (",int_sum,(")"))) 
 mpa_tree_count <- filter(outcomes3,Int_type == "MPA") 
-cbnrm_tree_count <- filter(outcomes3,Int_type == "CBNRM") 
-cbnrm_mpa_tree_count <- filter(outcomes3,Int_type == "CBNRM_MPA") 
+cbnrm_tree_count <- filter(outcomes3,Int_type == "CBM") 
+cbnrm_mpa_tree_count <- filter(outcomes3,Int_type == "CBMPA") 
 
 #pdf(file=paste0(datadir,"Outcome_attr_by_domain_MPA.pdf"))
 treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
@@ -1282,7 +1283,7 @@ treemap(cbnrm_tree_count,index=c("Out_type_int","Out_subtype"),
         ),
         overlap.labels=0.5,
         inflate.labels=F,
-        title="CBNRM")
+        title="CBM")
 # dev.off()
 
 # pdf(file=paste0(datadir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
@@ -1299,7 +1300,7 @@ treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         ),
         overlap.labels=0.5,
         inflate.labels=F,
-        title="CBNRM_MPA")
+        title="CBMPA")
 #dev.off()
 ```
 
@@ -1411,11 +1412,11 @@ Int_time_gps <-  data %>%
   group_by(Pub_year,Int_type) %>% 
   summarise(int_per_yr= n_distinct(aid)) %>% 
   spread(Int_type,value = int_per_yr) %>% 
-  mutate_at(vars(CBNRM:MPA),funs(replace(., is.na(.), 0))) %>% 
+  mutate_at(vars(CBM:MPA),funs(replace(., is.na(.), 0))) %>% 
   ungroup() %>% 
   arrange(Pub_year) %>% 
-  mutate_at(vars(CBNRM:MPA),funs(cumsum(.))) %>% 
-  gather("int_typ","val",CBNRM:MPA) %>% 
+  mutate_at(vars(CBM:MPA),funs(cumsum(.))) %>% 
+  gather("int_typ","val",CBM:MPA) %>% 
   bind_rows(All_time_gps %>% rename(int_typ=gp))
 tail(Int_time_gps)
 # non-elegant way to convert units to factor in order to reorder plot legends
@@ -1661,14 +1662,14 @@ dev.off()
 # par(mfrow=c(1,2),oma=c(0,0,2,0))
 # chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
 # title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
-png(file=paste0(outputdir,"STE by Domain-CBNRM-syn.png"), width=8, height=6, res=600, units = "in")
+png(file=paste0(outputdir,"STE by Domain-CBM-syn.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
 title(paste0("Synergies (n=",length(unique(cbnrm.syn$aid))," articles, x=",nrow(cbnrm.syn)," cases)"))
 dev.off()
-png(file=paste0(outputdir,"STE by Domain-CBNRM-both.png"), width=8, height=6, res=600, units = "in")
+png(file=paste0(outputdir,"STE by Domain-CBM-both.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
 title(paste0("Both (n=",length(unique(cbnrm.both$aid))," articles, x=",nrow(cbnrm.both)," cases)"))
-mtext("STE by outcome domain type in CBNRM",outer=TRUE,cex=1.5)
+mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
 dev.off()
 
 #-- Tree maps
@@ -1708,7 +1709,7 @@ treemap(mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         title="MPAs")
 dev.off()
 
-## CBNRM
+## CBM
 #pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM.pdf"))
 treemap(cbnrm_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
@@ -1723,9 +1724,9 @@ treemap(cbnrm_tree_count,index=c("Out_type_int","Out_subtype"),
         ),
         overlap.labels=0.5,
         inflate.labels=F,
-        title="CBNRM")
+        title="CBM")
 dev.off()
-## CBNRM_MPA
+## CBMPA
 pdf(file=paste0(outputdir,"Outcome_attr_by_domain_CBNRM_MPA.pdf"))
 treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         vSize="n",
@@ -1740,7 +1741,7 @@ treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
         ),
         overlap.labels=0.5,
         inflate.labels=F,
-        title="CBNRM_MPA")
+        title="CBMPA")
 dev.off()
 
 # # STE over time
