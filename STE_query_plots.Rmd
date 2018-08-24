@@ -48,10 +48,8 @@ wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 # Custom summary and plot functions
 source("my_summary_plot_functions.R")
 
-```
 
 ### Read in and prep data
-```{r eval=T}
 country <- import(paste0(datadir,"allcountries.csv"))
 ext.table <- import(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
 # paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
@@ -464,7 +462,25 @@ table(data$Outcome.data_type)/sum(!is.na(data$Outcome.data_type))
   ggplot(aes(x=reorder(Outcome.data_type,num),y=num))+
   ste_hist() +
   xlab("Outcome data type") + ylab("# cases"))
- 
+
+# demographic groups
+data %>% 
+  mutate_at(vars(STE_econ:STE_social_org),funs(ifelse(is.na(.),0,1))) %>% 
+  group_by(aid) %>% summarise_at(vars(STE_econ:STE_social_org), funs(max(.))) %>% 
+  gather("STE","val", STE_econ:STE_social_org) %>% 
+  group_by(STE) %>% 
+  summarise(num=sum(val),pct=num/75)
+  arrange(desc(num))
+# scale
+data %>% 
+  mutate_at(vars(STE_spatial:STE_temporal_scale),funs(ifelse(is.na(.),0,1))) %>% 
+  group_by(aid) %>% summarise_at(vars(STE_spatial:STE_temporal_scale), funs(max(.))) %>% 
+  gather("STE","val", STE_spatial:STE_temporal_scale) %>% 
+  group_by(STE) %>% 
+  summarise(num=sum(val),pct=num/75)
+  arrange(desc(num))
+
+
 # Perceived vs observed
 table(data$Out_definition)
 data$outcome_obs1 <- ifelse(data$Out_definition%in%c('Researcher','Respondent'),
@@ -1415,9 +1431,10 @@ names(int.cols) <- order.gp
   geom_line(aes(x = Pub_year, y = val, group = Intervention, colour = Intervention), size = 1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=int.cols) +
-  ggtitle('Intervention type')+ylim(c(0,60)))
+  ggtitle('Intervention type')+
+  scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
-#- Growth by domain
+#--- Growth by domain
 STE_time_dom <-  data %>%
   group_by(Pub_year,Out_type) %>% 
   summarise(dom_per_yr= n_distinct(aid))   %>%
@@ -1443,9 +1460,10 @@ names(dom.cols) <- order.gp
   geom_line(aes(x = Pub_year, y = val, group = Outcome_type, colour = Outcome_type),size=1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=dom.cols) +
-  ggtitle('Domain')+ylim(c(0,60)) )
+  ggtitle('Domain') +
+  scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
-#- Growth by STE (demographic group)
+#--- Growth by STE (demographic group)
 STE_time <-  data %>%
   select(aid,Pub_year,STE_domain:STE_temporal_scale) %>%
   gather("STE_type","val",STE_domain:STE_temporal_scale) %>%
@@ -1476,9 +1494,10 @@ names(ste.cols) <- order.gp
   geom_line(aes(x = Pub_year, y = val, group = Group, colour = Group),size=1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=ste.cols) +
-  ggtitle('Demographic groups')+ylim(c(0,60)))
+  ggtitle('Demographic groups') +
+  scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
-#- Growth by scale
+#--- Growth by scale
 STE_scale_gps <- STE_time %>%
   select(Pub_year,STE_spatial,STE_temporal_scale,STE_temporal_unit) %>%
   gather("STE_gp","val",STE_spatial:STE_temporal_unit) %>% 
@@ -1499,12 +1518,13 @@ names(ste.cols) <- order.gp
   geom_line(aes(x = Pub_year, y = val, group = Scale, colour = Scale),size=1.3)  +
   ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=ste.cols) +
-  ggtitle('Scale')+ylim(c(0,60)) )
+  ggtitle('Scale') +
+  scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
 
-# Interventions over time
+#--- Study type over time
 
 minyr <- min(data$Pub_year)-1
 maxyr <- max(data$Pub_year)+1
@@ -1733,7 +1753,7 @@ dev.off()
 # study growth over time
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
-ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 10.5,height = 6)
+ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 15,height = 11)
 
 # study type over time
 pStudy_typ_time
