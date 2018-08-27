@@ -124,7 +124,7 @@ ext.data <- ext.table %>%
          STE_domain='411_STE:_social_domain/HWB_outcomes',
          STE_econ='412_STE:_(economic_status)',
          STE_social='413_STE:__(social_status)',
-         STE_sex='414_STE:__(sex)',
+         STE_gender='414_STE:__(sex)',
          STE_ethnic='415_STE:__(ethnic_group/race)',
          STE_age='416_STE:__(age)',           
          STE_occupation='417_STE:__(occupation)',
@@ -678,7 +678,7 @@ id_counts <- data %>%
   theme(legend.position="bottom") +
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
-  scale_x_discrete(name="Demographic group", labels=c("age","econ. gp","ethnicity","occupation","sex", "social gp")) +
+  scale_x_discrete(name="Demographic group", labels=c("age","econ. gp","ethnicity","occupation","gender", "social gp")) +
   ylab("Intervention") +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
@@ -717,7 +717,7 @@ is_counts <- data %>%
 
 ##BY STE TYPE AND OUTCOME DOMAIN - HEATMAP
 
-# ste_outcomes <- select(data,aid,oid,Int_type,Out_type,STE_domain,STE_econ,STE_social,STE_sex,STE_ethnic,STE_age,STE_social_org,STE_social_org,STE_spatial,STE_temporal_unit,STE_temporal_scale) %>% distinct() 
+# ste_outcomes <- select(data,aid,oid,Int_type,Out_type,STE_domain,STE_econ,STE_social,STE_gender,STE_ethnic,STE_age,STE_social_org,STE_social_org,STE_spatial,STE_temporal_unit,STE_temporal_scale) %>% distinct() 
 # 
 # ste_outcomes2 <- ste_outcomes %>% gather("ste_type","ste_interaction",5:15) %>% arrange(Int_type) %>% filter(ste_interaction != "NA") %>% distinct() %>% filter(!is.na(Out_type)) %>% filter(!is.na(Int_type))
 # 
@@ -726,7 +726,7 @@ is_counts <- data %>%
 # 
 # ste_outcomes3 <- ste_outcomes2 %>% select(-aid)
 
-# ste_types <- c("STE_domain","STE_econ","STE_social","STE_sex","STE_ethnic","STE_age","STE_social_org","STE_social_org","STE_spatial","STE_temporal_unit","STE_temporal_scale")
+# ste_types <- c("STE_domain","STE_econ","STE_social","STE_gender","STE_ethnic","STE_age","STE_social_org","STE_social_org","STE_spatial","STE_temporal_unit","STE_temporal_scale")
 # 
 # # matrix <- count(ste_outcomes3,Out_type,Int_type,ste_type)
 # # matrix2 <- matrix %>% ungroup() %>% mutate(Int_type=factor(Int_type, levels=c("MPA","CBM","CBMPA","Certification")))
@@ -1310,7 +1310,7 @@ Still need to figure out other graphs over time:
 * rate of change?
 * make prettier 
 ```{r eval=T}
-# demographic_ste <- c("STE_age", "STE_econ","STE_ethnic","STE_occupation","STE_sex","STE_social")
+# demographic_ste <- c("STE_age", "STE_econ","STE_ethnic","STE_occupation","STE_gender","STE_social")
 # spat_temp_ste <- c("STE_spatial","STE_temporal_unit","STE_temporal_scale")
 # pub_per_yr <-data %>%
 #   select(aid,Pub_year) %>% 
@@ -1341,9 +1341,9 @@ Still need to figure out other graphs over time:
 # pSTE_social <- ggplot(STE_time,aes(x = Pub_year, y=STE_social)) +
 #     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
 #     ggtitle('socialgp')+ylim(c(0,40))+geom_line(aes(y = STE_social))
-# pSTE_sex <- ggplot(STE_time,aes(x = Pub_year, y=STE_sex)) +
+# pSTE_gender <- ggplot(STE_time,aes(x = Pub_year, y=STE_gender)) +
 #     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
-#     ggtitle('sex')+ylim(c(0,40))+geom_line(aes(y = STE_sex))
+#     ggtitle('gender')+ylim(c(0,40))+geom_line(aes(y = STE_gender))
 # pSTE_ethnic <- ggplot(STE_time,aes(x = Pub_year, y=STE_ethnic)) +
 #     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
 #     ggtitle('ethnicgp')+ylim(c(0,40))+geom_line(aes(y = STE_ethnic))
@@ -1372,7 +1372,7 @@ Still need to figure out other graphs over time:
 #     ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2020,5)) +
 #     ggtitle('Spatio-temporal')+ylim(c(0,60))+geom_line(aes(y = STE_spatial_temp))
 # 
-# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
+# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_gender,
 #           pSTE_ethnic,pSTE_age,pSTE_occupation,
 #           pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
 #           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
@@ -1478,7 +1478,7 @@ STE_time <-  data %>%
   mutate_at(vars(STE_age:STE_temporal_unit),funs(cumsum(.)))
 
 STE_time_demog <- STE_time %>%
-  select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_sex,STE_social) %>%
+  select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_gender,STE_social) %>%
   gather("STE_gp","val",STE_age:STE_social) %>% 
   mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
   bind_rows(All_time_gps %>% rename(STE_gp=gp))
@@ -1745,7 +1745,7 @@ treemap(cbnrm_mpa_tree_count,index=c("Out_type_int","Out_subtype"),
 dev.off()
 
 # # STE over time
-# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_sex,
+# plot_grid(pSTE_domain, pSTE_econ,pSTE_social,pSTE_gender,
 #           pSTE_ethnic,pSTE_age,pSTE_occupation,
 #           pSTE_spatial,pSTE_temporal_unit,pSTE_temporal_scale,
 #           labels=letters[1:12], ncol = 4, nrow = 3, hjust=-1)
