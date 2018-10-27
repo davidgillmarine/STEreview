@@ -1025,82 +1025,118 @@ auth_rpt # Christie and Pollnac the most repeated authors, but only 3 times
 No tradeoffs for CBM
 Minor error where some combinations are separated as 2 different chords (e.g.CBM-both: Social and Political:1, Political and Social: 2) 
 ```{r eval=T}
-###########################
-##FOR MPAS
-###########################
-mpa_outcomes <- filter(data,Int_type == "MPA") %>% distinct()
-mpa.syn <- filter(mpa_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
-mpa.tradeoff <- filter(mpa_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-mpa.both <- filter(mpa_outcomes,STE_domain == "Both Syn/Trd") %>% arrange(Out_type,aid)
-
-#Create input for tradeoffs
-aid <- as.list(unique(mpa.tradeoff$aid))
-# links <- matrix(nrow=1,ncol=3)
-# colnames(links) <- c("source","target","aid")
-# links <- as.data.frame(links)
+# function to count two-way domain occurrences 
+link_counts <-  function (X){
+aid <- as.list(unique(X$aid))
 links <- data.frame(source=NA,target=NA,aid=NA)
 
 for(i in aid){
-  sub <- filter(mpa.tradeoff, aid == i)
+  sub <- filter(X, aid == i) 
   if(nrow(sub) > 1){
-    sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub2) <- c("source","target")
-    sub2$aid <- c(i)
+    sub2 <- as.data.frame(t(combn(sub$Out_type, 2))) %>%  # all combinations of choosing 2 variables from set
+            rename_all(funs(c("source","target"))) %>% 
+            mutate(aid=i,
+                   source=as.character(source),
+                   target=as.character(target))
     links <- bind_rows(links,sub2)
   } else 
     links
+  }
+##Count links 
+return(links %>% 
+  slice(-1) %>% 
+  count(source,target))
 }
 
-links <- slice(links,-1)
 
-##Count links 
-mpa.counts.trdoff <- count(links,source,target)
-colnames(mpa.counts.trdoff) <- c("source","target","value") 
-mpa.counts.trdoff <- as.data.frame(mpa.counts.trdoff)
+# MPAs
+mpa.counts.syn <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts()
+mpa.counts.trdoff <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts()
+mpa.counts.both <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts()
 
-##For synergies
-aid2 <- as.list(unique(mpa.syn$aid))
-links2 <- data.frame(source=NA,target=NA,aid=NA)
+cbnrm.counts.syn <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts()
+cbnrm.counts.trdoff <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts()
+cbnrm.counts.both <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts()
 
-for(i in aid2){
-  sub <- filter(mpa.syn, aid == i)
-  if(nrow(sub) > 1){
-    sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub2) <- c("source","target")
-    sub2$aid <- c(i)
-    links2 <- bind_rows(links2,sub2)
-  } else 
-    links2
+cert.counts.syn <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts()
+cert.counts.trdff <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts()
+cert.counts.both <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts()
+
+#----- correlogram plots
+domain.list <- sort(unique(data$Out_type)) 
+domain.combns <-as.data.frame(t(combn(domain.list, 2))) %>% 
+  rename_all(funs(c("source","target"))) %>% 
+  mutate(source=as.character(source),
+         target=as.character(target)) %>% 
+  bind_rows(data.frame(source=domain.list,target=domain.list))
+
+corr.prep <- function(x){
+ data.prep <- domain.combns %>% 
+  left_join(x, by = c("source", "target")) %>% 
+  mutate_at(vars(source,target),
+            funs(recode(.,"Culture"="CUL","Economic well-being"="ECON",
+                        "Education"="EDUC","Health"="HLTH",
+                        "Political empowerment"="POLI","Social capital"="SOC"))) %>% 
+  spread(target,n) %>% 
+  mutate_at(vars(-source),funs(replace_na(., 0))) %>% 
+  column_to_rownames("source")  %>% 
+  as.matrix()
+  data.prep[lower.tri(data.prep)] <- t(data.prep)[lower.tri(data.prep)]
+  return(data.prep)
 }
+mpa.syn <- corr.prep(mpa.counts.syn)
+mpa.trdff <- corr.prep(mpa.counts.trdoff)
+mpa.both <- corr.prep(mpa.counts.both)
+cbm.syn <- corr.prep(cbnrm.counts.syn)
+cbm.both <- corr.prep(cbnrm.counts.both)
+cert.syn <- corr.prep(cert.counts.syn)
+cert.both <- corr.prep(cert.counts.both)
 
-links2 <- slice(links2,-1)
+png(paste0(outputdir,"STE_test_example1.png"), width = 12, height = 4, units = 'in', res = 300)
+par(mfrow=c(1,3),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
+corrplot(mpa.syn, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergy",mar=c(0,0,2,0),
+         p.mat = pval , insig = "blank",cl.pos = "n")
+corrplot(mpa.trdff, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:tradeoff",mar=c(0,0,2,0),
+         p.mat = pval , insig = "blank",cl.pos = "n")
+corrplot(mpa.both, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:both",mar=c(0,0,2,0),
+         p.mat = pval , insig = "blank",cl.pos = "n")
+dev.off()
 
-##Count links 
-mpa.counts.syn <- count(links2,source,target)
-colnames(mpa.counts.syn) <- c("source","target","value") 
-mpa.counts.syn <- as.data.frame(mpa.counts.syn)
+png(paste0(outputdir,"STE_test_example2.png"), width = 6, height = 6, units = 'in', res = 300)
+par(mfrow=c(1,1),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
+corrplot(mpa.syn*2, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergies and tradeoffs",mar=c(0,0,2,0),
+         p.mat = pval , insig = "blank",cl.pos = "n")
+corrplot(mpa.trdff*-2, tl.pos="d",method = "circle",type='upper',order = "original",title = "",mar=c(0,0,2,0),p.mat = pval , insig = "blank",cl.pos = "n",add=T)
+dev.off()
 
-#Create input for both
-aid3 <- as.list(unique(mpa.both$aid))
-links3 <- data.frame(source=NA,target=NA,aid=NA)
-
-for(i in aid3){
-  sub <- filter(mpa.both, aid == i)
-  if(nrow(sub) > 1){
-    sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub2) <- c("source","target")
-    sub2$aid <- c(i)
-    links3 <- bind_rows(links3,sub2)
-  } else 
-    links3
-}
-
-links3 <- slice(links3,-1)
-
-##Count links 
-mpa.counts.both <- count(links3,source,target)
-colnames(mpa.counts.both) <- c("source","target","value") 
-mpa.counts.both <- as.data.frame(mpa.counts.both)
+# Chord diagram
 
 grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
 #pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
@@ -1114,83 +1150,7 @@ title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mp
 mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
 #dev.off()
 
-###########################
-## for CBM
-###########################
-cbnrm_outcomes <- filter(data,Int_type %in% c("CBRNM_MPA","CBM")) %>% distinct()
-cbnrm.syn <- filter(cbnrm_outcomes,STE_domain == "Synergy") %>% arrange(Out_type,aid)
-cbnrm.tradeoff <- filter(cbnrm_outcomes,STE_domain == "Tradeoff") %>% arrange(Out_type,aid)
-cbnrm.both <- filter(cbnrm_outcomes,STE_domain == "Both Syn/Trd")
-
-#Create input for tradeoffs
-aid <- as.list(unique(cbnrm.tradeoff$aid))
-links <- data.frame(source=NA,target=NA,aid=NA)
-
-for(i in aid){
-  sub <- filter(cbnrm.tradeoff, aid == i)
-  if(nrow(sub) > 1){
-    sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub2) <- c("source","target")
-    sub2$aid <- c(i)
-    links <- bind_rows(links,sub2)
-  } else 
-    links
-}
-
-links <- slice(links,-1)
-
-##Count links 
-counts <- count(links,source,target)
-colnames(counts) <- c("source","target","value") 
-counts <- as.data.frame(counts)
-
-##For synergies
-
-aid2 <- as.list(unique(cbnrm.syn$aid))
-links2 <- data.frame(source=NA,target=NA,aid=NA)
-
-for(i in aid2){
-  sub <- filter(cbnrm.syn, aid == i)
-  if(nrow(sub) > 1){
-    sub2 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub2) <- c("source","target")
-    sub2$aid <- c(i)
-    links2 <- bind_rows(links2,sub2)
-  } else 
-    links2
-}
-
-links2 <- slice(links2,-1)
-
-##Count links 
-cbnrm.counts.syn <- count(links2,source,target)
-colnames(cbnrm.counts.syn) <- c("source","target","value") 
-cbnrm.counts.syn <- as.data.frame(cbnrm.counts.syn)
-
-##For both
-
-aid3 <- as.list(unique(cbnrm.both$aid))
-links3 <- data.frame(source=NA,target=NA,aid=NA)
-
-for(i in aid3){
-  sub <- filter(cbnrm.both, aid == i)
-  if(nrow(sub) > 1){
-    sub3 <- as.data.frame(t(combn(sub$Out_type, 2)))
-    colnames(sub3) <- c("source","target")
-    sub3$aid <- c(i)
-    links3 <- bind_rows(links3,sub3)
-  } else 
-    links3
-}
-
-links3 <- slice(links3,-1)
-
-##Count links 
-cbnrm.counts.both <- count(links3,source,target)
-colnames(cbnrm.counts.both) <- c("source","target","value") 
-cbnrm.counts.both <- as.data.frame(cbnrm.counts.both)
-
-grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
+#cbnrm
 #pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
 par(mfrow=c(1,2),oma=c(0,0,2,0))
 # chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
@@ -1576,16 +1536,10 @@ ggsave(paste0(outputdir,'STE study info.jpg'),width = 10.5,height = 6)
 plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
           ncol = 2, nrow = 2, hjust=-1)
 ggsave(paste0(outputdir,'STE outcome summaries.jpg'),width = 10.5,height = 6)
-## outcomes (stacked)
-plot_grid(pDataobs.type,pDatatyp.stdytype,pDataobs.stdytype,
-          pOut_type.stdytype,pOut_type.datatyp,pOut_type.dataobs,  
-          labels=letters[1:6], 
-          ncol = 3, nrow = 2, hjust=-1)
-ggsave(paste0(outputdir,'STE outcome summaries-stacked.jpg'),width = 14,height = 6)
 # Study design
-plot_grid(pDatatype,pDataobs,pStudy_typ, pCtrl_gp,labels=letters[1:4], 
-          ncol = 2, nrow = 2, hjust=-1)
-ggsave(paste0(outputdir,'study design.jpg'),width = 7,height = 5)
+# plot_grid(pDatatype,pDataobs,pStudy_typ, pCtrl_gp,labels=letters[1:4], 
+#           ncol = 2, nrow = 2, hjust=-1)
+# ggsave(paste0(outputdir,'study design.jpg'),width = 7,height = 5)
 # plot_grid(pDatatype,pDataobs,ncol = 1, nrow = 2, hjust=-1) +
 #   theme(axis.text=element_text(size=14),axis.title=element_text(size=14,face="bold"))
 # ggsave(paste0(outputdir,'study design1.jpg'),width = 4,height = 4)
@@ -1639,20 +1593,20 @@ png(file=paste0(outputdir,"Int_Outcome_STE_Heatmap_articles.png"), width=8, heig
 heat.map.int
 dev.off()
 
-#-- Chord diagrams # MPA pdf(file=paste0(outputdir,"STE by Domain -
-#MPA_4_24.pdf"),width=11,height=8.5) par(mfrow=c(1,2),oma=c(0,0,2,0))
+#-- Chord diagrams 
+# MPA pdf(file=paste0(outputdir,"STE by Domain -MPA_4_24.pdf"),width=11,height=8.5) par(mfrow=c(1,2),oma=c(0,0,2,0))
 par(oma=c(0,0,2,0), cex=1.5,mfrow=c(1,1))
 png(file=paste0(outputdir,"STE by Domain-MPA-tradeoffs.png"), width=6, height=4, res=600, units = "in")
 chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col)
-title(paste0("Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"))
+title(paste0("MPA Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"))
 dev.off()
 png(file=paste0(outputdir,"STE by Domain-MPA-synergies.png"), width=6, height=4, res=600, units = "in")
 chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
-title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"))
+title(paste0("MPA Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"))
 dev.off()
 png(file=paste0(outputdir,"STE by Domain-MPA-both.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
-title(paste0("Both (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"))
+title(paste0("MPA Synergies & Tradeoffs (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"))
 dev.off()
 
 #mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
@@ -1664,12 +1618,12 @@ dev.off()
 # title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
 png(file=paste0(outputdir,"STE by Domain-CBM-syn.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
-title(paste0("Synergies (n=",length(unique(cbnrm.syn$aid))," articles, x=",nrow(cbnrm.syn)," cases)"))
+title(paste0("CBM Synergies (n=",length(unique(cbnrm.syn$aid))," articles, x=",nrow(cbnrm.syn)," cases)"))
 dev.off()
 png(file=paste0(outputdir,"STE by Domain-CBM-both.png"), width=8, height=6, res=600, units = "in")
 chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
-title(paste0("Both (n=",length(unique(cbnrm.both$aid))," articles, x=",nrow(cbnrm.both)," cases)"))
-mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
+title(paste0("CBM Synergies & Tradeoffs (n=",length(unique(cbnrm.both$aid))," articles, x=",nrow(cbnrm.both)," cases)"))
+mtext("STE by outcome domain type in CBM",outer=TRUE,cex=2)
 dev.off()
 
 #-- Tree maps
@@ -1754,18 +1708,31 @@ dev.off()
 # study growth over time
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
-ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 15,height = 11)
+ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 14,height = 8)
+#ggsave(paste0(outputdir,'study_gps_over_time_presentation.jpg'),width = 10,height = 6)
 
-# study type over time
-pStudy_typ_time
-ggsave(paste0(outputdir,'study_type_over_time.jpg'),width = 8,height = 4)
+# # study type over time
+# pStudy_typ_time
+# ggsave(paste0(outputdir,'study_type_over_time.jpg'),width = 8,height = 4)
+# 
+# #  demographic over time
+# pSTE_demo_time
+# ggsave(paste0(outputdir,'demographic_over_time.jpg'),width = 11,height = 5)
+# 
+# #  scale over time
+# pSTE_scale_time 
+# ggsave(paste0(outputdir,'scale_over_time.jpg'),width = 11,height = 5)
 
-#  demographic over time
-pSTE_demo_time
-ggsave(paste0(outputdir,'demographic_over_time.jpg'),width = 11,height = 5)
-
-#  scale over time
-pSTE_scale_time 
-ggsave(paste0(outputdir,'scale_over_time.jpg'),width = 11,height = 5)
+## Study design and outcomes
+# plot_grid(pDataobs.type,pDatatyp.stdytype,pDataobs.stdytype,
+#           pOut_type.stdytype,pOut_type.datatyp,pOut_type.dataobs,  
+#           labels=letters[1:6], 
+#           ncol = 3, nrow = 2, hjust=-1)
+plot_grid(pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype+theme(legend.position="none"),pDataobs.type,  
+           labels=letters[1:3], 
+           ncol = 3, nrow = 1, hjust=-1)
+ggsave(paste0(outputdir,'STE outcome-data observer.jpg'),width = 14,height = 4)
+pOut_type.stdytype
+ggsave(paste0(outputdir,'STE outcome-studytype.jpg'),width = 7,height = 4)
 
 ```
