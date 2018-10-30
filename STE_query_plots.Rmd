@@ -1021,14 +1021,24 @@ auth_rpt # Christie and Pollnac the most repeated authors, but only 3 times
 # # map <- fortify(map, region="ISO3")
 # # 
 ```
-### Chord diagram
+### Synergies and tradeoffs by domain
 No tradeoffs for CBM
 Minor error where some combinations are separated as 2 different chords (e.g.CBM-both: Social and Political:1, Political and Social: 2) 
+updated versions include visualizations using 1. heat maps and 2. corrplot
 ```{r eval=T}
+# Heat map
+domain.list <- sort(unique(data$Out_type))
+domain.combns <-as.data.frame(t(combn(domain.list, 2))) %>%
+  rename_all(funs(c("source","target"))) %>%
+  mutate(source=as.character(source),
+         target=as.character(target)) %>%
+  bind_rows(data.frame(source=domain.list,target=domain.list))
+
 # function to count two-way domain occurrences 
 link_counts <-  function (X){
 aid <- as.list(unique(X$aid))
-links <- data.frame(source=NA,target=NA,aid=NA)
+links <- data.frame(source=NA,target=NA,aid=NA) %>% 
+  slice(-1) 
 
 for(i in aid){
   sub <- filter(X, aid == i) 
@@ -1042,99 +1052,144 @@ for(i in aid){
   } else 
     links
   }
-##Count links 
-return(links %>% 
-  slice(-1) %>% 
-  count(source,target))
-}
-
-
-# MPAs
-mpa.counts.syn <- data %>% 
-  filter(Int_type == "MPA" & STE_domain == "Synergy") %>% 
-  arrange(Out_type,aid) %>% 
-  link_counts()
-mpa.counts.trdoff <- data %>% 
-  filter(Int_type == "MPA" & STE_domain == "Tradeoff") %>% 
-  arrange(Out_type,aid) %>% 
-  link_counts()
-mpa.counts.both <- data %>% 
-  filter(Int_type == "MPA" & STE_domain == "Both Syn/Trd") %>% 
-  arrange(Out_type,aid) %>% 
-  link_counts()
-
-cbnrm.counts.syn <- data %>% 
-  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Synergy") %>% 
-  arrange(Out_type,aid) %>% 
-  link_counts()
-cbnrm.counts.trdoff <- data %>% 
-  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Tradeoff") %>% 
-  arrange(Out_type,aid) %>% 
-  link_counts()
-cbnrm.counts.both <- data %>% 
-  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Both Syn/Trd") %>% 
-  arrange(Out_type,aid) %>%
-  link_counts()
-
-cert.counts.syn <-  data %>% 
-  filter(Int_type %in% c("Certification") & STE_domain == "Synergy") %>% 
-  arrange(Out_type,aid) %>%
-  link_counts()
-cert.counts.trdff <-  data %>% 
-  filter(Int_type %in% c("Certification") & STE_domain == "Tradeoff") %>% 
-  arrange(Out_type,aid) %>%
-  link_counts()
-cert.counts.both <-  data %>% 
-  filter(Int_type %in% c("Certification") & STE_domain == "Both Syn/Trd") %>% 
-  arrange(Out_type,aid) %>%
-  link_counts()
-
-#----- correlogram plots
-domain.list <- sort(unique(data$Out_type)) 
-domain.combns <-as.data.frame(t(combn(domain.list, 2))) %>% 
-  rename_all(funs(c("source","target"))) %>% 
-  mutate(source=as.character(source),
-         target=as.character(target)) %>% 
-  bind_rows(data.frame(source=domain.list,target=domain.list))
-
-corr.prep <- function(x){
- data.prep <- domain.combns %>% 
-  left_join(x, by = c("source", "target")) %>% 
+#Count links 
+links.out <- links %>% 
+  count(source,target)
+#add NAs
+data.prep <- domain.combns %>%
+  left_join(links.out, by = c("source", "target")) %>%
   mutate_at(vars(source,target),
             funs(recode(.,"Culture"="CUL","Economic well-being"="ECON",
                         "Education"="EDUC","Health"="HLTH",
-                        "Political empowerment"="POLI","Social capital"="SOC"))) %>% 
-  spread(target,n) %>% 
-  mutate_at(vars(-source),funs(replace_na(., 0))) %>% 
-  column_to_rownames("source")  %>% 
-  as.matrix()
-  data.prep[lower.tri(data.prep)] <- t(data.prep)[lower.tri(data.prep)]
+                        "Political empowerment"="POLI","Social capital"="SOC"))) 
   return(data.prep)
 }
-mpa.syn <- corr.prep(mpa.counts.syn)
-mpa.trdff <- corr.prep(mpa.counts.trdoff)
-mpa.both <- corr.prep(mpa.counts.both)
-cbm.syn <- corr.prep(cbnrm.counts.syn)
-cbm.both <- corr.prep(cbnrm.counts.both)
-cert.syn <- corr.prep(cert.counts.syn)
-cert.both <- corr.prep(cert.counts.both)
+# function to plot two-way domain occurrences 
+link_heatmap <- function(.data,source,target){
+heat.map.domain <- ggplot(.data, aes_string(x='source',y='target',fill='n')) +
+    geom_tile(color="gray90",size=0.1) +
+    geom_text(aes(label=n),show.legend = F) +
+    scale_fill_gradient(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90") +
+    coord_equal() +
+    #theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+    theme(axis.ticks=element_line(size=0.4)) +
+    theme(axis.text=element_text(size=12)) +
+    theme(legend.title=element_text(size=10)) +
+    theme(legend.text=element_text(size=10)) +
+    theme(legend.title.align=1) +
+    theme(legend.position="bottom") +
+    theme(legend.key.size=unit(1, "cm")) +
+    theme(legend.key.width=unit(1, "cm")) +
+    xlab("") +
+    ylab("") +
+    theme(axis.text.x = element_text(angle=45,hjust=1,size=12))
+}
 
-png(paste0(outputdir,"STE_test_example1.png"), width = 12, height = 4, units = 'in', res = 300)
-par(mfrow=c(1,3),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
-corrplot(mpa.syn, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergy",mar=c(0,0,2,0),
-         p.mat = pval , insig = "blank",cl.pos = "n")
-corrplot(mpa.trdff, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:tradeoff",mar=c(0,0,2,0),
-         p.mat = pval , insig = "blank",cl.pos = "n")
-corrplot(mpa.both, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:both",mar=c(0,0,2,0),
-         p.mat = pval , insig = "blank",cl.pos = "n")
-dev.off()
+# run functions
+mpa.counts.syn <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
+mpa.counts.trdoff <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
+mpa.counts.both <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
+cbnrm.counts.syn <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
+cbnrm.counts.trdoff <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
+cbnrm.counts.both <- data %>% 
+  filter(Int_type %in% c("CBRNM_MPA","CBM") & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts() %>% 
+  link_heatmap()
+cert.counts.syn <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts() %>% 
+  link_heatmap()
+cert.counts.trdff <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Tradeoff") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts() %>% 
+  link_heatmap()
+cert.counts.both <-  data %>% 
+  filter(Int_type %in% c("Certification") & STE_domain == "Both Syn/Trd") %>% 
+  arrange(Out_type,aid) %>%
+  link_counts() %>% 
+  link_heatmap()
 
-png(paste0(outputdir,"STE_test_example2.png"), width = 6, height = 6, units = 'in', res = 300)
-par(mfrow=c(1,1),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
-corrplot(mpa.syn*2, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergies and tradeoffs",mar=c(0,0,2,0),
-         p.mat = pval , insig = "blank",cl.pos = "n")
-corrplot(mpa.trdff*-2, tl.pos="d",method = "circle",type='upper',order = "original",title = "",mar=c(0,0,2,0),p.mat = pval , insig = "blank",cl.pos = "n",add=T)
-dev.off()
+plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="MPA",title="Synergy"),
+          mpa.counts.trdoff+theme(legend.position = "none")+labs(title="Tradeoffs"),
+          mpa.counts.both+theme(legend.position = "none")+labs(title="Both Syn/Trdoffs"),
+          cbnrm.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="CBM"),
+          cbnrm.counts.trdoff+theme(legend.position = "none",axis.title=element_blank()), 
+          cbnrm.counts.both+theme(legend.position = "none"),
+          cert.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="Certification"),
+          cert.counts.trdff+theme(legend.position = "none",axis.title=element_blank()),
+          cert.counts.both+theme(legend.position = "none"),
+          labels=letters[1:9], ncol = 3, nrow = 3, hjust=-1)
+ggsave(paste0(outputdir,"prelim_ste_heatmaps.png"),width = 13,height = 13)
+
+# #----- correlogram plots
+# domain.list <- sort(unique(data$Out_type))
+# domain.combns <-as.data.frame(t(combn(domain.list, 2))) %>%
+#   rename_all(funs(c("source","target"))) %>%
+#   mutate(source=as.character(source),
+#          target=as.character(target)) %>%
+#   bind_rows(data.frame(source=domain.list,target=domain.list))
+# 
+# corr.prep <- function(x){
+#  data.prep <- domain.combns %>%
+#   left_join(x, by = c("source", "target")) %>%
+#   mutate_at(vars(source,target),
+#             funs(recode(.,"Culture"="CUL","Economic well-being"="ECON",
+#                         "Education"="EDUC","Health"="HLTH",
+#                         "Political empowerment"="POLI","Social capital"="SOC"))) %>%
+#   spread(target,n) %>%
+#   mutate_at(vars(-source),funs(replace_na(., 0))) %>%
+#   column_to_rownames("source")  %>%
+#   as.matrix()
+#   data.prep[lower.tri(data.prep)] <- t(data.prep)[lower.tri(data.prep)]
+#   return(data.prep)
+# }
+#  mpa.syn <- corr.prep(mpa.counts.syn)
+# mpa.trdff <- corr.prep(mpa.counts.trdoff)
+# mpa.both <- corr.prep(mpa.counts.both)
+# cbm.syn <- corr.prep(cbnrm.counts.syn)
+# cbm.both <- corr.prep(cbnrm.counts.both)
+# cert.syn <- corr.prep(cert.counts.syn)
+# cert.both <- corr.prep(cert.counts.both)
+# 
+# png(paste0(outputdir,"STE_test_example1.png"), width = 12, height = 4, units = 'in', res = 300)
+# par(mfrow=c(1,3),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
+# corrplot(mpa.syn, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergy",mar=c(0,0,2,0),
+#          p.mat = pval , insig = "blank",cl.pos = "n")
+# corrplot(mpa.trdff, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:tradeoff",mar=c(0,0,2,0),
+#          p.mat = pval , insig = "blank",cl.pos = "n")
+# corrplot(mpa.both, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:both",mar=c(0,0,2,0),
+#          p.mat = pval , insig = "blank",cl.pos = "n")
+# dev.off()
+# 
+# png(paste0(outputdir,"STE_test_example2.png"), width = 6, height = 6, units = 'in', res = 300)
+# par(mfrow=c(1,1),mar=c(5, 4, 9, 2),oma=c(0,0,0,0),cex=0.8,xpd=FALSE, mgp=c(3, 1, 0))
+# corrplot(mpa.syn*2, tl.pos="d",method = "circle",type='lower',order = "original",title = "MPA:synergies and tradeoffs",mar=c(0,0,2,0),
+#          p.mat = pval , insig = "blank",cl.pos = "n")
+# corrplot(mpa.trdff*-2, tl.pos="d",method = "circle",type='upper',order = "original",title = "",mar=c(0,0,2,0),p.mat = pval , insig = "blank",cl.pos = "n",add=T)
+# dev.off()
 
 # Chord diagram
 
