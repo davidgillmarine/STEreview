@@ -41,6 +41,7 @@ pcdir <- gsub("Dropbox.*","",getwd())
 dropbox <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/")
 datadir <- paste0(pcdir,"Dropbox/data/analysis/STEreview/")
 outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/")
+fig.outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/_Drafts/figures/")
 
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
@@ -530,7 +531,7 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
           ggplot(aes(x=Out_type,y=n)) +
           geom_bar(aes(fill = Study_type),stat = 'identity') +
           scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
-          labs(x="Outcome type", y="# outcomes", fill="Study type") +
+          labs(x="Domain", y="# outcomes", fill="Study type") +
           coord_flip() +
           theme_bw() +
           theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
@@ -540,7 +541,7 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
           ggplot(aes(x=Out_type,y=n)) +
           geom_bar(aes(fill = outcome_obs1),stat = 'identity') +
           scale_fill_manual(values = c("lightblue","blue", "darkblue")) +
-          labs(x="Outcome type", y="# outcomes", fill="Data observer") +
+          labs(x="Domain", y="# outcomes", fill="Data observer") +
           coord_flip() +
           theme_bw() +
           theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
@@ -550,27 +551,27 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
           ggplot(aes(x=Out_type,y=n)) +
           geom_bar(aes(fill = Outcome.data_type),stat = 'identity') +
           scale_fill_manual(values = c("skyblue1", "lightblue","blue", "darkblue")) +
-          labs(x="Outcome type", y="# outcomes", fill="Data type") +
+          labs(x="Domain", y="# outcomes", fill="Data type") +
           coord_flip() +
           theme_bw() +
           theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
 
 
 # Dimensions
-ste.data <- data %>% 
-  select(STE_domain:STE_temporal_scale)
-
-ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
-names(ste.data1)[1] <- "total"
-ste.data1$var <- gsub('STE_','',row.names(ste.data1))
-
-(pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
-    ste_hist() +
-    xlab("STE dimension") )
-
-plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
-          ncol = 2, nrow = 2, hjust=-1)
-minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
+# ste.data <- data %>% 
+#   select(STE_domain:STE_temporal_scale)
+# 
+# ste.data1 <-as.data.frame(apply(ste.data, 2, function(x) sum(!is.na(x))))
+# names(ste.data1)[1] <- "total"
+# ste.data1$var <- gsub('STE_','',row.names(ste.data1))
+# 
+# (pSTE <- ggplot(ste.data1,aes(x=reorder(var,total),y=total)) +
+#     ste_hist() +
+#     xlab("STE dimension") )
+# 
+# plot_grid(pDatatype,pDataobs,pOut_domain, pSTE,labels=letters[1:4], 
+#           ncol = 2, nrow = 2, hjust=-1)
+# minyr <- min(data$Pub_year)-1;maxyr <- max(data$Pub_year)+1
 
          
 # # Demographic groups
@@ -651,7 +652,6 @@ io_counts <- data %>%
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
 #------ Demographic groups
-head(id_counts)
 id_counts <- data %>% 
   select(aid,Int_type,STE_econ:STE_occupation) %>%
   mutate_at(vars(STE_econ:STE_occupation),funs(ifelse(is.na(.),0,1))) %>%
@@ -683,18 +683,22 @@ id_counts <- data %>%
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
 #------ Scales
-head(is_counts)
 is_counts <- data %>% 
   select(aid,Int_type,STE_spatial:STE_temporal_scale) %>%
   mutate_at(vars(STE_spatial:STE_temporal_scale),funs(ifelse(is.na(.),0,1))) %>%
+  mutate(STE_temporal=ifelse(STE_temporal_unit+STE_temporal_scale>0,1,0)) %>% 
   group_by(aid,Int_type) %>% 
   summarise_all(funs(max)) %>% 
   ungroup() %>% 
   select(-aid) %>% 
   group_by(Int_type) %>% 
   summarise_all(funs(sum)) %>% 
-  gather("ste_type","n",STE_spatial:STE_temporal_scale) %>% 
+  select(-STE_temporal_unit,-STE_temporal_scale) %>% 
+  gather("ste_type","n",STE_spatial:STE_temporal) %>% 
   mutate(ste_type=gsub("STE_","",ste_type))
+head(is_counts)
+sum(is_counts$n[is_counts$ste_type=="spatial"])/75
+sum(is_counts$n[is_counts$ste_type=="temporal"])/75
 
 (heat.map.scale <- ggplot(is_counts, aes(x=ste_type,y=Int_type,fill=n)) +
   geom_tile(color="gray90",size=0.1) +
@@ -710,7 +714,8 @@ is_counts <- data %>%
   theme(legend.position="bottom") +
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
-  scale_x_discrete(name="Scale", labels=c("spatial units","temporal scale","temporal units")) +
+#  scale_x_discrete(name="Scale", labels=c("spatial units","temporal scale","temporal units")) +
+  scale_x_discrete(name="Scale", labels=c("spatial","temporal")) +
   ylab("Intervention") +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
@@ -1142,7 +1147,6 @@ plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_tex
           cert.counts.trdff+theme(legend.position = "none",axis.title=element_blank()),
           cert.counts.both+theme(legend.position = "none"),
           labels=letters[1:9], ncol = 3, nrow = 3, hjust=-1)
-ggsave(paste0(outputdir,"prelim_ste_heatmaps.png"),width = 13,height = 13)
 
 # #----- correlogram plots
 # domain.list <- sort(unique(data$Out_type))
@@ -1480,17 +1484,31 @@ names(dom.cols) <- order.gp
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
 #--- Growth by STE (demographic group)
+# # separated temporal scale and unit
+# STE_time <-  data %>%
+#   select(aid,Pub_year,STE_domain:STE_temporal_scale) %>%
+#   gather("STE_type","val",STE_domain:STE_temporal_scale) %>%
+#   filter(!is.na(val)) %>%
+#   group_by(Pub_year,STE_type) %>%
+#   summarise(ste_per_yr= n_distinct(aid)) %>%
+#   spread(STE_type,value = ste_per_yr) %>%
+#   mutate_at(vars(STE_age:STE_temporal_unit),funs(replace(., is.na(.), 0))) %>%
+#   ungroup() %>%
+#   arrange(Pub_year) %>%
+#   mutate_at(vars(STE_age:STE_temporal_unit),funs(cumsum(.)))
+
 STE_time <-  data %>%
   select(aid,Pub_year,STE_domain:STE_temporal_scale) %>%
   gather("STE_type","val",STE_domain:STE_temporal_scale) %>%
   filter(!is.na(val)) %>%
+  mutate(STE_type=ifelse(STE_type%in%c("STE_temporal_scale","STE_temporal_unit"),"STE_temporal",STE_type)) %>% 
   group_by(Pub_year,STE_type) %>%
   summarise(ste_per_yr= n_distinct(aid)) %>%
   spread(STE_type,value = ste_per_yr) %>%
-  mutate_at(vars(STE_age:STE_temporal_unit),funs(replace(., is.na(.), 0))) %>%
+  mutate_at(vars(STE_age:STE_temporal),funs(replace(., is.na(.), 0))) %>%
   ungroup() %>%
   arrange(Pub_year) %>%
-  mutate_at(vars(STE_age:STE_temporal_unit),funs(cumsum(.)))
+  mutate_at(vars(STE_age:STE_temporal),funs(cumsum(.)))
 
 STE_time_demog <- STE_time %>%
   select(Pub_year,STE_age,STE_econ,STE_ethnic,STE_occupation,STE_gender,STE_social) %>%
@@ -1514,11 +1532,18 @@ names(ste.cols) <- order.gp
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
 
 #--- Growth by scale
+## separated temporal scale and unit
+# STE_scale_gps <- STE_time %>%
+#   select(Pub_year,STE_spatial,STE_temporal_scale,STE_temporal_unit) %>%
+#   gather("STE_gp","val",STE_spatial:STE_temporal_unit) %>% 
+#   mutate(STE_gp=gsub("STE_","",STE_gp),
+#          STE_gp=gsub("spatial","spatial_unit",STE_gp)) %>% 
+#   bind_rows(All_time_gps %>% rename(STE_gp=gp))
+
 STE_scale_gps <- STE_time %>%
-  select(Pub_year,STE_spatial,STE_temporal_scale,STE_temporal_unit) %>%
-  gather("STE_gp","val",STE_spatial:STE_temporal_unit) %>% 
-  mutate(STE_gp=gsub("STE_","",STE_gp),
-         STE_gp=gsub("spatial","spatial_unit",STE_gp)) %>% 
+  select(Pub_year,STE_spatial,STE_temporal) %>%
+  gather("STE_gp","val",STE_spatial:STE_temporal) %>% 
+  mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
   bind_rows(All_time_gps %>% rename(STE_gp=gp))
 
 # non-elegant way to convert units to factor in order to reorder plot legends
@@ -1569,6 +1594,82 @@ names(group.colors) <- Study_type.lbl$x.label
 ```
 
 ### Export plots
+#### For paper
+```{r, EVAL =F}
+# Fig1. Study and author country
+png(file=paste0(fig.outputdir,"fig1_Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
+#pdf(file=paste0(fig.outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+plot_grid(auth_ctry_map + labs(title="Author insitutions"),
+          study_ctry_map + labs(title="Study locations"),labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
+dev.off()
+
+# Fig2. study growth over time
+plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
+          labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
+ggsave(paste0(fig.outputdir,'fig2_study_gps_over_time.jpg'),width = 14,height = 8)
+#ggsave(paste0(fig.outputdir,'study_gps_over_time_presentation.jpg'),width = 10,height = 6)
+
+# Fig3. Number of interventions
+pInt_typ.waffle 
+ggsave(paste0(fig.outputdir,'fig3_STE intervention waffle.jpg'),width = 8,height = 4)
+
+# Fig4. Heat map: outcomes assessed by intervention and a) domain; b) demographic group and; 3) scale
+png(file=paste0(fig.outputdir,"fig4_Heatmap_articles.png"), width=13.5, height=5, res=600, units = "in")
+plot_grid(heat.map.domain,heat.map.demog, heat.map.scale,labels=letters[1:3], ncol = 3, nrow = 1, hjust=-1)
+dev.off()
+
+# Fig5. Distribution of domains and sub-domains 
+# All interventions
+png(file=paste0(fig.outputdir,"fig5_Outcome_attr_by_domain_all.png"), width=9, height=8, res=600, units = "in")
+treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
+        vSize="n",
+        type="index",
+        fontsize.labels = c(15,10),
+        fontcolor.labels=c("white","black"),
+        fontface.labels=c(2,1),
+        bg.labels=c("transparent"),
+        align.labels=list(
+          c("center","top"),
+          c("left","bottom")
+        ),
+        overlap.labels=0.5,
+        inflate.labels=F,
+        title="All interventions")
+dev.off()
+
+# Fig6. Heat maps showing the number of reported synergies (a,d,g), tradeoffs 
+if(!exists("cbnrm.counts.trdoff")) { 
+  cbnrm.counts.trdoff <- ggplot()
+  }
+if(!exists("cert.counts.trdff")) { 
+  cert.counts.trdff <- ggplot()
+  }
+plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="MPA",title="Synergy"),
+          mpa.counts.trdoff+theme(legend.position = "none")+labs(title="Tradeoffs"),
+          mpa.counts.both+theme(legend.position = "none")+labs(title="Both Syn/Trdoffs"),
+          cbnrm.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="CBM"),
+          cbnrm.counts.trdoff+theme(legend.position = "none",axis.title=element_blank()), 
+          cbnrm.counts.both+theme(legend.position = "none"),
+          cert.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="Certification"),
+          cert.counts.trdff+theme(legend.position = "none",axis.title=element_blank()),
+          cert.counts.both+theme(legend.position = "none"),
+          labels=letters[1:9], ncol = 3, nrow = 3, hjust=-1)
+ggsave(paste0(fig.outputdir,"fig6_syn_trd_both_heatmaps.png"),width = 13,height = 13)
+
+# Fig7. Study design and outcome types 
+plot_grid(pDataobs.type+theme(legend.position="none"),pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype, 
+           labels=letters[1:3], 
+           ncol = 3, nrow = 1, hjust=-1)
+ggsave(paste0(fig.outputdir,'fig7_STE outcome-data observer.jpg'),width = 14,height = 4)
+
+# Fig8 Outcome types by type of study for 195 social outcomes 
+pOut_type.stdytype
+ggsave(paste0(fig.outputdir,'fig8_STE outcome-studytype.jpg'),width = 7,height = 4)
+
+```
+
+
+#### Other
 Fix case numbers in chord diagrams
 ```{r, EVAL =F}
 #-- Intervention & study plots
@@ -1783,7 +1884,7 @@ ggsave(paste0(outputdir,'study_gps_over_time.jpg'),width = 14,height = 8)
 #           pOut_type.stdytype,pOut_type.datatyp,pOut_type.dataobs,  
 #           labels=letters[1:6], 
 #           ncol = 3, nrow = 2, hjust=-1)
-plot_grid(pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype+theme(legend.position="none"),pDataobs.type,  
+plot_grid(pDataobs.type+theme(legend.position="none"),pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype, 
            labels=letters[1:3], 
            ncol = 3, nrow = 1, hjust=-1)
 ggsave(paste0(outputdir,'STE outcome-data observer.jpg'),width = 14,height = 4)
