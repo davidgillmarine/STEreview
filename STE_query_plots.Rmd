@@ -39,7 +39,7 @@ library(tidyverse)
 # Directories
 pcdir <- gsub("Dropbox.*","",getwd())
 dropbox <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/")
-datadir <- paste0(pcdir,"Dropbox/data/analysis/STEreview/")
+mapdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/basemaps/")
 outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/")
 fig.outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/_Drafts/figures/")
 
