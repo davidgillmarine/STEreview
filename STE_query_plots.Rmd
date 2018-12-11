@@ -39,7 +39,7 @@ library(tidyverse)
 # Directories
 pcdir <- gsub("Dropbox.*","",getwd())
 dropbox <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/")
-datadir <- paste0(pcdir,"Dropbox/data/analysis/STEreview/")
+mapdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/basemaps/")
 outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/")
 fig.outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/_Drafts/figures/")
 
@@ -47,11 +47,11 @@ fig.outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/_Drafts/figures
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
 
 # Custom summary and plot functions
-source("my_summary_plot_functions.R")
+#source("my_summary_plot_functions.R")
 
 
 ### Read in and prep data
-country <- import(paste0(datadir,"allcountries.csv"))
+country <- import(paste0(mapdir,"allcountries.csv"))
 ext.table <- import(paste0(dropbox,'STE extracted results to date.xlsx'), sheet = 1) 
 # paste0('Are article and outcome exclusion values are identical? ',identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`))
 # if (!identical(ext.table$`05 Exclude`,ext.table$`40 Exclude`)){
@@ -474,7 +474,7 @@ data %>%
   summarise(num=sum(val),pct=num/75)
   arrange(desc(num))
 # scale
-data %>% 
+test <- data %>% 
   mutate_at(vars(STE_spatial:STE_temporal_scale),funs(ifelse(is.na(.),0,1))) %>% 
   group_by(aid) %>% summarise_at(vars(STE_spatial:STE_temporal_scale), funs(max(.))) %>% 
   gather("STE","val", STE_spatial:STE_temporal_scale) %>% 
@@ -828,7 +828,7 @@ ctry_sum1 <- country %>%
 ctry_sum$Country[!ctry_sum$Country%in%ctry_sum1$Country] # any missing?
 
 # read in map
-map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+map <- rgdal::readOGR(paste0(mapdir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 map <-broom::tidy(map,region="ISO3")
 #map@data[map@data$NAME=="Turks and Caicos Islands",]
 #plot
@@ -858,7 +858,7 @@ auth_ctry_sum1 <- country %>%
 auth_ctry_sum$Country[!auth_ctry_sum$Country%in%auth_ctry_sum1$Country] # any missing?
 
 # read in map
-map <- rgdal::readOGR(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
+map <- rgdal::readOGR(paste0(mapdir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 map <-broom::tidy(map,region="ISO3")
 #map@data[map@data$NAME=="Turks and Caicos Islands",]
 #plot
@@ -892,7 +892,7 @@ connect1 <-connect %>%
 head(connect1)
 
 # get lat lon for country centroids
-map <- st_read(paste0(datadir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp")) %>% 
+map <- st_read(paste0(mapdir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp")) %>% 
         left_join(ctry_sum1,by= c("ISO3"="code")) %>% 
         mutate(n=replace(n, is.na(n), 0))
 map.pts <- st_centroid(map) %>%
@@ -1137,6 +1137,13 @@ cert.counts.both <-  data %>%
   link_counts() %>% 
   link_heatmap()
 
+if(!exists("cbnrm.counts.trdoff")){
+ cbnrm.counts.trdoff <- ggplot()
+}
+
+if(!exists("cert.counts.trdff")){
+  cert.counts.trdff <- ggplot()
+}
 plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="MPA",title="Synergy"),
           mpa.counts.trdoff+theme(legend.position = "none")+labs(title="Tradeoffs"),
           mpa.counts.both+theme(legend.position = "none")+labs(title="Both Syn/Trdoffs"),
@@ -1197,29 +1204,29 @@ plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_tex
 
 # Chord diagram
 
-grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
-#pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
-par(mfrow=c(1,2),oma=c(0,0,2,0))
-chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col) 
-title(paste0("Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"),line=-3.5)
-chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
-title(paste0("Both (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"),line=-3.5)
-chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
-title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"),line=-3.5)
-mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
-#dev.off()
+# grid.col <- c("Economic well-being"="#66c2a5","Social capital"="#fc8d62", "Culture"="#8da0cb", "Political empowerment"="#e78ac3","Education"="#a6d854","Health"="#ffd92f")
+# #pdf(file=paste0(datadir,"STE by Domain - MPA_4_24.pdf"),width=11,height=8.5)
+# par(mfrow=c(1,2),oma=c(0,0,2,0))
+# chordDiagram(as.data.frame(mpa.counts.trdoff), transparency = 0.3, grid.col=grid.col) 
+# title(paste0("Tradeoffs (n=",length(unique(mpa.tradeoff$aid))," articles, x=",nrow(mpa.tradeoff)," cases)"),line=-3.5)
+# chordDiagram(as.data.frame(mpa.counts.both), transparency = 0.3, grid.col=grid.col)
+# title(paste0("Both (n=",length(unique(mpa.both$aid))," articles, x=",nrow(mpa.both)," cases)"),line=-3.5)
+# chordDiagram(as.data.frame(mpa.counts.syn), transparency = 0.3, grid.col=grid.col)
+# title(paste0("Synergies (n=",length(unique(mpa.syn$aid))," articles, x=",nrow(mpa.syn)," cases)"),line=-3.5)
+# mtext("STE by outcome domain type in MPAs",outer=TRUE,cex=1.5)
+# #dev.off()
 
 #cbnrm
-#pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
-par(mfrow=c(1,2),oma=c(0,0,2,0))
-# chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
-# title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
-chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
-title("Synergies (n=8 articles, x=21 cases)",line=-3.5)
-chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
-title("Both (n=8 articles, x=21 cases)",line=-3.5)
-mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
-#dev.off()
+# #pdf(file=paste0(datadir,"STE by Domain - CBNRM_4_24.pdf"),width=11,height=8.5)
+# par(mfrow=c(1,2),oma=c(0,0,2,0))
+# # chordDiagram(as.data.frame(counts), transparency = 0.3, grid.col=grid.col) # no tradeoff data?
+# # title(paste0("Tradeoffs (n=",length(aid)," articles, x=",nrow()," cases)"),line=-3.5)
+# chordDiagram(as.data.frame(cbnrm.counts.syn), transparency = 0.3, grid.col=grid.col)
+# title("Synergies (n=8 articles, x=21 cases)",line=-3.5)
+# chordDiagram(as.data.frame(cbnrm.counts.both), transparency = 0.3, grid.col=grid.col)
+# title("Both (n=8 articles, x=21 cases)",line=-3.5)
+# mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
+# #dev.off()
 ```
 ### Treemapping
 ```{r eval=T}
@@ -1449,7 +1456,7 @@ names(int.cols) <- order.gp
 
 (pInt_time_gps <- ggplot(Int_time_gps)  + 
   geom_line(aes(x = Pub_year, y = val, group = Intervention, colour = Intervention), size = 1.3)  +
-  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ylab("Cumulative frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=int.cols) +
   ggtitle('Intervention type')+
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
@@ -1478,7 +1485,7 @@ names(dom.cols) <- order.gp
 
 (pSTE_time_dom <- ggplot(STE_time_dom)  + 
   geom_line(aes(x = Pub_year, y = val, group = Outcome_type, colour = Outcome_type),size=1.3)  +
-  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ylab("Cumulative frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=dom.cols) +
   ggtitle('Domain') +
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
@@ -1526,7 +1533,7 @@ names(ste.cols) <- order.gp
 
 (pSTE_time_demog <-  ggplot(STE_time_demog)  + 
   geom_line(aes(x = Pub_year, y = val, group = Group, colour = Group),size=1.3)  +
-  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ylab("Cumulative frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=ste.cols) +
   ggtitle('Demographic groups') +
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
@@ -1557,7 +1564,7 @@ names(ste.cols) <- order.gp
 
 (pSTE_scale_gps <- ggplot(STE_scale_gps)  + 
   geom_line(aes(x = Pub_year, y = val, group = Scale, colour = Scale),size=1.3)  +
-  ylab("Frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  ylab("Cumulative frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
   scale_colour_manual(values=ste.cols) +
   ggtitle('Scale') +
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
@@ -1597,8 +1604,8 @@ names(group.colors) <- Study_type.lbl$x.label
 #### For paper
 ```{r, EVAL =F}
 # Fig1. Study and author country
-png(file=paste0(fig.outputdir,"fig1_Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
-#pdf(file=paste0(fig.outputdir,"Auth_Country_Map_dark_5_11.pdf"), width=16, height=8.5)
+#png(file=paste0(fig.outputdir,"fig1_Auth_Study_Country_Map_dark.png"), width=13.5, height=16, res=600, units = "in")
+pdf(file=paste0(fig.outputdir,"fig1_Auth_Study_Country_Map_dark.pdf"), width=13.5, height=16)
 plot_grid(auth_ctry_map + labs(title="Author insitutions"),
           study_ctry_map + labs(title="Study locations"),labels=letters[1:2], ncol = 1, nrow = 2, hjust=-1)
 dev.off()
@@ -1606,21 +1613,24 @@ dev.off()
 # Fig2. study growth over time
 plot_grid(pInt_time_gps, pSTE_time_dom,pSTE_time_demog,pSTE_scale_gps,
           labels=letters[1:4], ncol = 2, nrow = 2, hjust=-1)
-ggsave(paste0(fig.outputdir,'fig2_study_gps_over_time.jpg'),width = 14,height = 8)
-#ggsave(paste0(fig.outputdir,'study_gps_over_time_presentation.jpg'),width = 10,height = 6)
+#ggsave(paste0(fig.outputdir,'fig2_study_gps_over_time.jpg'),width = 14,height = 8)
+ggsave(paste0(fig.outputdir,'fig2_study_gps_over_time.pdf'),width = 14,height = 8)
 
 # Fig3. Number of interventions
 pInt_typ.waffle 
-ggsave(paste0(fig.outputdir,'fig3_STE intervention waffle.jpg'),width = 8,height = 4)
+#ggsave(paste0(fig.outputdir,'fig3_STE intervention waffle.jpg'),width = 8,height = 4)
+ggsave(paste0(fig.outputdir,'fig3_STE intervention waffle.pdf'),width = 8,height = 4)
 
 # Fig4. Heat map: outcomes assessed by intervention and a) domain; b) demographic group and; 3) scale
-png(file=paste0(fig.outputdir,"fig4_Heatmap_articles.png"), width=13.5, height=5, res=600, units = "in")
+#png(file=paste0(fig.outputdir,"fig4_Heatmap_articles.png"), width=13.5, height=5, res=600, units = "in")
+pdf(file=paste0(fig.outputdir,"fig4_Heatmap_articles.pdf"), width=13.5, height=5)
 plot_grid(heat.map.domain,heat.map.demog, heat.map.scale,labels=letters[1:3], ncol = 3, nrow = 1, hjust=-1)
 dev.off()
 
 # Fig5. Distribution of domains and sub-domains 
 # All interventions
-png(file=paste0(fig.outputdir,"fig5_Outcome_attr_by_domain_all.png"), width=9, height=8, res=600, units = "in")
+#png(file=paste0(fig.outputdir,"fig5_Outcome_attr_by_domain_all.png"), width=9, height=8, res=600, units = "in")
+pdf(file=paste0(fig.outputdir,"fig5_Outcome_attr_by_domain_all.pdf"), width=9, height=8)
 treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
         vSize="n",
         type="index",
@@ -1638,12 +1648,7 @@ treemap(outcomes3,index=c("Out_type_all","Out_subtype"),
 dev.off()
 
 # Fig6. Heat maps showing the number of reported synergies (a,d,g), tradeoffs 
-if(!exists("cbnrm.counts.trdoff")) { 
-  cbnrm.counts.trdoff <- ggplot()
-  }
-if(!exists("cert.counts.trdff")) { 
-  cert.counts.trdff <- ggplot()
-  }
+
 plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_text(face="bold"))+labs(y="MPA",title="Synergy"),
           mpa.counts.trdoff+theme(legend.position = "none")+labs(title="Tradeoffs"),
           mpa.counts.both+theme(legend.position = "none")+labs(title="Both Syn/Trdoffs"),
@@ -1654,17 +1659,20 @@ plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_tex
           cert.counts.trdff+theme(legend.position = "none",axis.title=element_blank()),
           cert.counts.both+theme(legend.position = "none"),
           labels=letters[1:9], ncol = 3, nrow = 3, hjust=-1)
-ggsave(paste0(fig.outputdir,"fig6_syn_trd_both_heatmaps.png"),width = 13,height = 13)
+#ggsave(paste0(fig.outputdir,"fig6_syn_trd_both_heatmaps.png"),width = 13,height = 13)
+ggsave(paste0(fig.outputdir,"fig6_syn_trd_both_heatmaps.pdf"),width = 13,height = 13)
 
 # Fig7. Study design and outcome types 
 plot_grid(pDataobs.type+theme(legend.position="none"),pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype, 
            labels=letters[1:3], 
            ncol = 3, nrow = 1, hjust=-1)
-ggsave(paste0(fig.outputdir,'fig7_STE outcome-data observer.jpg'),width = 14,height = 4)
+#ggsave(paste0(fig.outputdir,'fig7_STE outcome-data observer.jpg'),width = 14,height = 4)
+ggsave(paste0(fig.outputdir,'fig7_STE outcome-data observer.pdf'),width = 14,height = 4)
 
 # Fig8 Outcome types by type of study for 195 social outcomes 
 pOut_type.stdytype
-ggsave(paste0(fig.outputdir,'fig8_STE outcome-studytype.jpg'),width = 7,height = 4)
+#ggsave(paste0(fig.outputdir,'fig8_STE outcome-studytype.jpg'),width = 7,height = 4)
+ggsave(paste0(fig.outputdir,'fig8_STE outcome-studytype.pdf'),width = 7,height = 4)
 
 ```
 
