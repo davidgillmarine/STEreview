@@ -474,7 +474,7 @@ data %>%
   group_by(aid) %>% summarise_at(vars(STE_econ:STE_social_org), funs(max(.))) %>% 
   gather("STE","val", STE_econ:STE_social_org) %>% 
   group_by(STE) %>% 
-  summarise(num=sum(val),pct=num/75)
+  summarise(num=sum(val),pct=num/75) %>% 
   arrange(desc(num))
 # scale
 data %>% 
@@ -558,6 +558,7 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
           coord_flip() +
           theme_bw() +
           theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+
 
 
 # Dimensions
@@ -1159,6 +1160,22 @@ plot_grid(mpa.counts.syn+theme(legend.position = "none",axis.title.y=element_tex
           cert.counts.trdff+theme(legend.position = "none",axis.title=element_blank()),
           cert.counts.both+theme(legend.position = "none"),
           labels=letters[1:9], ncol = 3, nrow = 3, hjust=-1)
+
+
+
+# Syn vs Trad vs Nils
+data %>% 
+  select(aid,STE_domain) %>% 
+  group_by(STE_domain) %>% 
+  summarise(n=n_distinct(aid), pct=n/75)
+data %>% 
+  select(aid,STE_occupation) %>% 
+  group_by(STE_occupation) %>% 
+  summarise(n=n_distinct(aid), pct=n/75)
+data %>% 
+  select(aid,STE_spatial) %>% 
+  group_by(STE_spatial) %>% 
+  summarise(n=n_distinct(aid), pct=n/75)
 
 # #----- correlogram plots
 # domain.list <- sort(unique(data$Out_type))
