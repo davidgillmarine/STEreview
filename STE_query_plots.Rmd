@@ -1618,7 +1618,8 @@ names(ste.cols) <- order.gp
 STE_scale_gps <- STE_time %>%
   select(Pub_year,STE_spatial,STE_temporal) %>%
   gather("STE_gp","val",STE_spatial:STE_temporal) %>% 
-  mutate(STE_gp=gsub("STE_","",STE_gp)) %>% 
+  mutate(STE_gp=gsub("STE_","",STE_gp),
+         STE_gp=str_to_title(STE_gp)) %>% 
   bind_rows(All_time_gps %>% rename(STE_gp=gp))
 
 # non-elegant way to convert units to factor in order to reorder plot legends
