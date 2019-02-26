@@ -4,6 +4,20 @@ author: "Sam Cheng, David Gill"
 date: "May 14, 2018"
 output: html_document
 ---
+## Background
+Code for analysis and plots for Synergies, Tradeoffs and Equity in marine conservation paper.
+
+Some additional edits need to be made to the plots for resubmission:
+
+* Country map (change articles to studies)
+* Scale vs unit vs scale type
+* Demographic gp vs demography
+* CBM to CBNRM in fig 2
+* Fig4: all boxes equal size
+* Fig2: no hyphen in wellbeing, Capitalize labels
+* Fig 6: lose title, change to legend title
+
+
 ##Setup
 load packages, set file directories
 ```{r}
@@ -629,15 +643,16 @@ table(data$outcome_obs1)/sum(!is.na(data$outcome_obs1))
 # io_counts <- gather(io_counts,"Int_type","n",1:5)
 
 #------ Domains
+# wrangle data
 io_counts <- data %>% 
-        group_by(Int_type,Out_type) %>% 
-        count() %>% 
-        spread(key=Int_type, value=n) %>% 
+        group_by(Int_type,Out_type) %>% # group data by intervention type and outcome type
+        count() %>% # count observations 
+        spread(key=Int_type, value=n) %>%  # spread the values (each intervention type in own column, this allows us to find NAs)
     #   mutate(PES=0) %>%
-        gather("Int_type","n",CBM:MPA) %>% 
-        mutate(n=ifelse(is.na(n),0,as.integer(n)))
+        gather("Int_type","n",CBM:MPA) %>% # gather the values (in order to fill NAs with 0s)
+        mutate(n=ifelse(is.na(n),0,as.integer(n))) # fill NAs with 0
 
-(heat.map.domain <- ggplot(io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
+(heat.map.domain <- ggplot(data=io_counts, aes(x=Out_type,y=Int_type,fill=n)) +
   geom_tile(color="gray90",size=0.1) +
   geom_text(aes(label=n),show.legend = F) +
   scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90", limits=c(0,40)) +
@@ -837,13 +852,6 @@ ctry_sum$Country[!ctry_sum$Country%in%ctry_sum1$Country] # any missing?
 map <- rgdal::readOGR(paste0(mapdir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
 map <-broom::tidy(map,region="ISO3")
 #map@data[map@data$NAME=="Turks and Caicos Islands",]
-#plot
-(study_ctry_map <- ggplot() +
-  geom_map(data=ctry_sum1, aes(map_id=code, fill=n),map=map) +
-  expand_limits(x=map$long,y=map$lat) +
-  theme(panel.background = element_rect(fill = "#CCCCCC", colour = "#CCCCCC"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-  scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
-                       midpoint=(pmax(max(auth_ctry_sum1$n),max(ctry_sum1$n))/2),limits=c(0,pmax(max(auth_ctry_sum1$n),max(ctry_sum1$n)))))
 
 
 #--------------------- Author institution location (country)
@@ -863,11 +871,14 @@ auth_ctry_sum1 <- country %>%
 
 auth_ctry_sum$Country[!auth_ctry_sum$Country%in%auth_ctry_sum1$Country] # any missing?
 
-# read in map
-map <- rgdal::readOGR(paste0(mapdir,"TM_WORLD_BORDERS-0.3/TM_WORLD_BORDERS-0.3.shp"))
-map <-broom::tidy(map,region="ISO3")
-#map@data[map@data$NAME=="Turks and Caicos Islands",]
-#plot
+#plot study map
+(study_ctry_map <- ggplot() +
+  geom_map(data=ctry_sum1, aes(map_id=code, fill=n),map=map) +
+  expand_limits(x=map$long,y=map$lat) +
+  theme(panel.background = element_rect(fill = "#CCCCCC", colour = "#CCCCCC"), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  scale_fill_gradient2(low="white",mid="#2171b5",high="#08519c",
+                       midpoint=(pmax(max(auth_ctry_sum1$n),max(ctry_sum1$n))/2),limits=c(0,pmax(max(auth_ctry_sum1$n),max(ctry_sum1$n)))))
+#plot author map
 (auth_ctry_map <- ggplot() +
   geom_map(data=auth_ctry_sum1, aes(map_id=code, fill=n),map=map) +
   expand_limits(x=map$long,y=map$lat) +
