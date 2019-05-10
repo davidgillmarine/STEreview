@@ -56,6 +56,7 @@ dropbox <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/")
 mapdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/basemaps/")
 outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Data extraction/updated_plots/")
 fig.outputdir <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/_Drafts/figures/")
+fig.outputdir2 <- paste0(pcdir,"Dropbox/SynergiesTradeoffs.Review/Submission materials/resubmission/pdf files/individual figures/")
 
 # Projections
 wgs84 <- CRS("+proj=longlat +ellps=WGS84")
@@ -387,7 +388,7 @@ int.type <- data %>%
   summarise(num=n_distinct(aid), pct=paste0("(",round((num/75)*100)," %)")) %>% 
  # unite("Intervention",Int_type,pct, sep=" ") %>% 
   arrange (-num)
-(pInt_typ.waffle <- waffle(int.type, rows = 7, title="Intervention type", colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
+(pInt_typ.waffle <- waffle(int.type, rows = 7, colors = rev(c("black","#6baed6","#084594","#c6dbef"))))
 
 # Intervention scale
 data %>% group_by(int_scale) %>% summarise(num=n_distinct(aid), pct=num/75)
@@ -472,6 +473,20 @@ data$Indicators[!data$Indicators%in%cpue.terms & grepl("food security",data$Out_
 data <- data %>% 
    mutate(cpue =ifelse(Indicators%in%cpue.terms & grepl("food security",Out_subtype),1,0))
 sum(data$cpue)
+length(grep("food security",data$Out_subtype,value=T))
+data %>% filter(grepl("food security",Out_subtype)) %>% group_by(cpue) %>% summarise(num=n_distinct(aid), pct=num/24) %>% arrange(desc(num))
+
+  # Studies focused on fishers
+fisher.terms <-   c(grep("fish",data$Out_subgroup,value=T), grep("CPUE",data$Out_subgroup,value=T,ignore.case = F),
+                  grep("co-op",data$Out_subgroup,value=T,ignore.case = F), grep("coop",data$Out_subgroup,value=T,ignore.case = F),
+                  grep("gear",data$Out_subgroup,value=T))
+data %>% 
+  mutate(fisher =ifelse(Out_subgroup%in%fisher.terms & !is.na(STE_occupation),1,0)) %>%
+  filter(Out_subgroup%in%fisher.terms & !is.na(STE_occupation)) %>% 
+  group_by(fisher) %>% 
+  summarise(num=n_distinct(aid), 
+            pct=num/length(unique(data$aid[!is.na(data$STE_occupation)])))
+
 length(grep("food security",data$Out_subtype,value=T))
 data %>% filter(grepl("food security",Out_subtype)) %>% group_by(cpue) %>% summarise(num=n_distinct(aid), pct=num/24) %>% arrange(desc(num))
 
@@ -698,7 +713,7 @@ id_counts <- data %>%
   theme(legend.position="bottom") +
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
-  scale_x_discrete(name="Demographic group", labels=c("Age","Economic","Ethnicity","Gender","Occupation", "Social")) +
+  scale_x_discrete(name="Social/demographic group", labels=c("Age","Economic","Ethnicity","Gender","Occupation", "Social")) +
   ylab("Intervention") +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
@@ -736,7 +751,7 @@ sum(is_counts$n[is_counts$ste_type=="temporal"])/75
   theme(legend.key.size=unit(1, "cm")) +
   theme(legend.key.width=unit(1, "cm")) +
 #  scale_x_discrete(name="Scale", labels=c("spatial units","temporal scale","temporal units")) +
-  scale_x_discrete(name="Scale", labels=c("Spatial","Temporal")) +
+  scale_x_discrete(name="Scale type", labels=c("Spatial","Temporal")) +
   ylab("Intervention") +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
 
@@ -1304,6 +1319,74 @@ data %>%
 # title("Both (n=8 articles, x=21 cases)",line=-3.5)
 # mtext("STE by outcome domain type in CBM",outer=TRUE,cex=1.5)
 # #dev.off()
+
+
+# Heat map
+group.list <- gsub("STE_","",names(select(data,STE_econ:STE_occupation)))
+
+domain.combns <-as.data.frame(t(combn(domain.list, 2))) %>%
+  rename_all(funs(c("source","target"))) %>%
+  mutate(source=as.character(source),
+         target=as.character(target)) %>%
+  bind_rows(data.frame(source=domain.list,target=domain.list))
+
+# function to count two-way domain occurrences 
+link_counts <-  function (X){
+aid <- as.list(unique(X$aid))
+links <- data.frame(source=NA,target=NA,aid=NA) %>% 
+  slice(-1) 
+
+for(i in aid){
+  sub <- filter(X, aid == i) 
+  if(nrow(sub) > 1){
+    sub2 <- as.data.frame(t(combn(sub$Out_type, 2))) %>%  # all combinations of choosing 2 variables from set
+            rename_all(funs(c("source","target"))) %>% 
+            mutate(aid=i,
+                   source=as.character(source),
+                   target=as.character(target))
+    links <- bind_rows(links,sub2)
+  } else 
+    links
+  }
+#Count links 
+links.out <- links %>% 
+  count(source,target)
+#add NAs
+data.prep <- domain.combns %>%
+  left_join(links.out, by = c("source", "target")) %>%
+  mutate_at(vars(source,target),
+            funs(recode(.,"Culture"="CUL","Economic well-being"="ECON",
+                        "Education"="EDUC","Health"="HLTH",
+                        "Political empowerment"="POLI","Social capital"="SOC"))) 
+  return(data.prep)
+}
+# function to plot two-way domain occurrences 
+link_heatmap <- function(.data,source,target){
+heat.map.domain <- ggplot(.data, aes_string(x='source',y='target',fill='n')) +
+    geom_tile(color="gray90",size=0.1) +
+    geom_text(aes(label=n),show.legend = F) +
+    scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90",limits=c(0,20)) +
+    coord_equal() +
+    #theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+    theme(axis.ticks=element_line(size=0.4)) +
+    theme(axis.text=element_text(size=12)) +
+    theme(legend.title=element_text(size=10)) +
+    theme(legend.text=element_text(size=10)) +
+    theme(legend.title.align=1) +
+    theme(legend.position="bottom") +
+    theme(legend.key.size=unit(1, "cm")) +
+    theme(legend.key.width=unit(1, "cm")) +
+    xlab("") +
+    ylab("") +
+    theme(axis.text.x = element_text(angle=45,hjust=1,size=12))
+}
+
+# run functions
+mpa.counts.syn <- data %>% 
+  filter(Int_type == "MPA" & STE_domain == "Synergy") %>% 
+  arrange(Out_type,aid) %>% 
+  link_counts() %>% 
+  link_heatmap()
 ```
 ### Treemapping
 ```{r eval=T}
@@ -1548,7 +1631,8 @@ STE_time_dom <-  data %>%
   arrange(Pub_year) %>% 
   mutate_at(vars(Culture:`Social capital`),funs(cumsum(.))) %>% 
   gather("out_typ","val",Culture:`Social capital`) %>% 
-  bind_rows(All_time_gps %>% rename(out_typ=gp))
+  bind_rows(All_time_gps %>% rename(out_typ=gp)) %>% 
+  mutate(out_typ=gsub("Economic well-being","Economic wellbeing", out_typ))
 tail(STE_time_dom)
 
 # non-elegant way to convert units to factor in order to reorder plot legends
@@ -1563,6 +1647,7 @@ names(dom.cols) <- order.gp
 (pSTE_time_dom <- ggplot(STE_time_dom)  + 
   geom_line(aes(x = Pub_year, y = val, group = Outcome_type, colour = Outcome_type),size=1.3)  +
   ylab("Cumulative frequency") + scale_x_continuous(name="Year", breaks=seq(1985,2025,5)) +
+  labs(colour ="Outcome type") +
   scale_colour_manual(values=dom.cols) +
   ggtitle('Domain') +
   scale_y_continuous(limits=c(0,80), breaks=seq(0,80,10), labels=c("0","","20","","40","","60","","80")))
@@ -1697,6 +1782,8 @@ plot_grid(auth_ctry_map + labs(title="Author insitutions", x="Long", y="Lat"),
           study_ctry_map + labs(title="Study locations", x="Long", y="Lat"),
           labels=letters[1:2], ncol = 2, nrow = 1, hjust=-1)
 dev.off()
+# Resubmission
+study_ctry_map+theme(legend.position="bottom") + labs(title = NULL)
 
 # Fig4. Study design and outcome types 
 plot_grid(pDataobs.type+theme(legend.position="none"),pOut_type.dataobs+theme(legend.position="none"),pDataobs.stdytype, 

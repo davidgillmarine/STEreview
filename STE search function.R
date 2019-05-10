@@ -1,12 +1,11 @@
-setwd('C:/Users/LocalAdmin/Documents/Smith/Lit review')
+pcdir <- gsub("Dropbox.*","",getwd())
+setwd(paste0(pcdir,'Dropbox/data/analysis/STEreview/Lit review'))
 
 library(bibliometrix)
 library(data.table)
 #library(tm)
-library(stringr)
-library(tidyr)
-library(dplyr)
 library(rio)
+library(tidyverse)
 
 #############################################################################################################################
 #search string, written for perl=T
@@ -38,12 +37,12 @@ STE <-  c("synerg", "tradeoffs\\b", "tradeoff\\b", "trade-off\\b", "trade-offs\\
           "benefit sharing\\b", "constrain")
 #############################################################################################################################
 #read in Ernest's data 
-Edata<- read.csv("ErnestEtAl_library.csv", header = TRUE, stringsAsFactors = FALSE)
+Edata<- import("ErnestEtAl_library.csv")
 Edata$Keywords <- 'NA'
 Edata$Source <- 'Ernest et al'
 names(Edata)
 #read in Sam's data, 
-Sdata<- read.csv("McKinnonEtAl_16Feb17.csv", header = TRUE, stringsAsFactors = FALSE)
+Sdata<- import("McKinnonEtAl_16Feb17.csv")
 Sdata$Source <- 'McKinnon et al'
 Sdata$Journal <- 'Unknown'
 names(Sdata)[c(1:7,54)]
@@ -102,7 +101,7 @@ SEW_results <- rbind(SEresults,WoS[,c(22,8,1,15,2,3,11,9,23)])
 
 #############################################################################################################################
 #read in mined bibliography data
-BibMined <- read.csv("Mined_bibliographies_16Feb17.csv", header = TRUE, stringsAsFactors = FALSE)
+BibMined <- import("Mined_bibliographies_16Feb17.csv")
 names(BibMined)
 BibMined$Journal="Unknown"
 All_results <- rbind(SEW_results,BibMined[,c("Record.Number","Reference.Type","Author","Year","Title","Journal","Abstract","Keywords","Source")])
@@ -128,7 +127,7 @@ All_results <- arrange(All_results,Title)
 #write.csv(All_results,'TitleAbstractCoding_19May17.csv',row.names = F)
 
 # Clean up reference types
-All_results <- read.csv('TitleAbstractCoding_19May17.csv',stringsAsFactors = F, header = T)
+All_results <- import('TitleAbstractCoding_19May17.csv')
 
 All_results1 <- All_results
 unique(All_results1$Reference.Type)
