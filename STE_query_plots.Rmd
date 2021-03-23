@@ -476,20 +476,6 @@ sum(data$cpue)
 length(grep("food security",data$Out_subtype,value=T))
 data %>% filter(grepl("food security",Out_subtype)) %>% group_by(cpue) %>% summarise(num=n_distinct(aid), pct=num/24) %>% arrange(desc(num))
 
-  # Studies focused on fishers
-fisher.terms <-   c(grep("fish",data$Out_subgroup,value=T), grep("CPUE",data$Out_subgroup,value=T,ignore.case = F),
-                  grep("co-op",data$Out_subgroup,value=T,ignore.case = F), grep("coop",data$Out_subgroup,value=T,ignore.case = F),
-                  grep("gear",data$Out_subgroup,value=T))
-data %>% 
-  mutate(fisher =ifelse(Out_subgroup%in%fisher.terms & !is.na(STE_occupation),1,0)) %>%
-  filter(Out_subgroup%in%fisher.terms & !is.na(STE_occupation)) %>% 
-  group_by(fisher) %>% 
-  summarise(num=n_distinct(aid), 
-            pct=num/length(unique(data$aid[!is.na(data$STE_occupation)])))
-
-length(grep("food security",data$Out_subtype,value=T))
-data %>% filter(grepl("food security",Out_subtype)) %>% group_by(cpue) %>% summarise(num=n_distinct(aid), pct=num/24) %>% arrange(desc(num))
-
 # Data type
 table(data$Outcome.data_type)/sum(!is.na(data$Outcome.data_type))
 (pDatatype <-  ste_gp_o('Outcome.data_type') %>% 
@@ -511,8 +497,9 @@ data %>%
   group_by(aid) %>% summarise_at(vars(STE_spatial:STE_temporal_scale), funs(max(.))) %>% 
   gather("STE","val", STE_spatial:STE_temporal_scale) %>% 
   group_by(STE) %>% 
-  summarise(num=sum(val),pct=num/75)
+  summarise(num=sum(val),pct=num/75) %>% 
   arrange(desc(num))
+
 
 
 # Perceived vs observed
@@ -754,6 +741,148 @@ sum(is_counts$n[is_counts$ste_type=="temporal"])/75
   scale_x_discrete(name="Scale type", labels=c("Spatial","Temporal")) +
   ylab("Intervention") +
   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+#separate heat map by S,T,S&T##########################################################
+
+#------ Domains
+idom_counts_STE <- data %>% 
+  select(Out_type,STE_domain) %>% 
+  # mutate_at(vars(STE_econ:STE_social_org),funs(ifelse(is.na(.),0,1))) %>% 
+  # group_by(aid) %>% summarise_at(vars(STE_econ:STE_social_org), funs(max(.))) %>% 
+  filter(!is.na(STE_domain)) %>% 
+  filter(STE_domain%in%c("Synergy","Tradeoff","Both Syn/Trd")) %>% 
+  group_by(Out_type,STE_domain) %>% 
+  add_count() %>% 
+  unique %>% 
+  ungroup()
+
+
+(heat.map.domainSTE <- ggplot(idom_counts_STE, aes(x=Out_type,y=STE_domain,fill=n)) +
+  geom_tile(color="gray90",size=0.1) +
+  geom_text(aes(label=n),show.legend = F) +
+  scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90", limits=c(0,40)) +
+  coord_equal() +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+  theme(axis.ticks=element_line(size=0.4)) +
+  theme(axis.text=element_text(size=12)) +
+  theme(legend.title=element_text(size=10)) +
+  theme(legend.text=element_text(size=10)) +
+  theme(legend.title.align=1) +
+  theme(legend.position="bottom") +
+  theme(legend.key.size=unit(1, "cm")) +
+  theme(legend.key.width=unit(1, "cm")) +
+  scale_x_discrete(name="Wellbeing domain") +
+  ylab("STE type") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+#------ Demographic groups
+id_counts_STE <- data %>% 
+  select(STE_econ:STE_social_org) %>% 
+  # mutate_at(vars(STE_econ:STE_social_org),funs(ifelse(is.na(.),0,1))) %>% 
+  # group_by(aid) %>% summarise_at(vars(STE_econ:STE_social_org), funs(max(.))) %>% 
+  gather("ste_type","val",STE_econ:STE_social_org) %>% 
+  filter(!is.na(val)) %>% 
+  filter(val%in%c("Synergy","Tradeoff")) %>% 
+  group_by(ste_type,val) %>% 
+  add_count() %>% 
+  unique %>% 
+  ungroup() %>% 
+  mutate(ste_type=gsub("STE_","",ste_type),
+         ste_type=str_to_title(ste_type))
+
+(heat.map.demogSTE <- ggplot(id_counts_STE, aes(x=ste_type,y=val,fill=n)) +
+  geom_tile(color="gray90",size=0.1) +
+  geom_text(aes(label=n),show.legend = F) +
+  scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90", limits=c(0,40)) +
+  coord_equal() +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+  theme(axis.ticks=element_line(size=0.4)) +
+  theme(axis.text=element_text(size=12)) +
+  theme(legend.title=element_text(size=10)) +
+  theme(legend.text=element_text(size=10)) +
+  theme(legend.title.align=1) +
+  theme(legend.position="bottom") +
+  theme(legend.key.size=unit(1, "cm")) +
+  theme(legend.key.width=unit(1, "cm")) +
+  scale_x_discrete(name="Social/demographic group", 
+                   labels=c("Age","Economic","Ethnicity","Gender","Occupation", "Social")) +
+  ylab("STE type") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+#------ Scales
+
+is_counts_STE <- data %>% 
+  select(STE_spatial:STE_temporal_scale) %>% 
+  gather("ste_type","val",STE_spatial:STE_temporal_scale) %>% 
+  mutate(ste_type=gsub("STE_temporal_scale","STE_temporal_unit",ste_type)) %>% 
+  filter(!is.na(val)) %>% 
+  filter(val%in%c("Synergy","Tradeoff")) %>% 
+  group_by(ste_type,val) %>% 
+  add_count() %>% 
+  unique %>% 
+  ungroup() %>% 
+  mutate(ste_type=gsub("STE_","",ste_type),
+         ste_type=str_to_title(ste_type))
+
+(heat.map.scaleSTE<- ggplot(is_counts_STE, aes(x=ste_type,y=val,fill=n)) +
+  geom_tile(color="gray90",size=0.1) +
+  geom_text(aes(label=n),show.legend = F) +
+  scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90", limits=c(0,40)) +
+  coord_equal() +
+# theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+  theme(axis.ticks=element_line(size=0.4)) +
+  theme(axis.text=element_text(size=12)) +
+  theme(legend.title=element_text(size=10)) +
+  theme(legend.text=element_text(size=10)) +
+  theme(legend.title.align=1) +
+  theme(legend.position="bottom") +
+  theme(legend.key.size=unit(1, "cm")) +
+  theme(legend.key.width=unit(1, "cm")) +
+  scale_x_discrete(name="Scale type", 
+                   labels=c("Spatial","Temporal")) +
+  ylab("STE type") +
+  theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+plot_grid(heat.map.domainSTE,heat.map.demogSTE, heat.map.scaleSTE,labels=letters[1:3], ncol = 3, nrow = 1, hjust=-1)
+ggsave(paste0(fig.outputdir,'synergies_tradeoff_counts.pdf'),width = 14,height = 5)
+
+
+#------ All groups
+# 
+# iall_counts_STE <- data %>% 
+#   select(STE_domain:STE_temporal_scale) %>% 
+#   gather("ste_type","val",STE_domain:STE_temporal_scale) %>% 
+#   mutate(ste_type=gsub("STE_temporal_scale","STE_temporal_unit",ste_type)) %>% 
+#   filter(!is.na(val)) %>% 
+#   filter(val%in%c("Synergy","Tradeoff")) %>% 
+#   group_by(ste_type,val) %>% 
+#   add_count() %>% 
+#   unique %>% 
+#   ungroup() %>% 
+#   mutate(ste_type=gsub("STE_","",ste_type),
+#          ste_type=str_to_title(ste_type))
+# 
+# (heat.map.allSTE<- ggplot(iall_counts_STE, aes(x=ste_type,y=val,fill=n)) +
+#   geom_tile(color="gray90",size=0.1) +
+#   geom_text(aes(label=n),show.legend = F) +
+#   scale_fill_gradient2(low="#f7fbff",high="#2171b5",name="# Cases",na.value="gray90", limits=c(0,40)) +
+#   coord_equal() +
+# # theme_tufte(base_family="Helvetica") +    # having issues with font, font colour in windows...
+#   theme(axis.ticks=element_line(size=0.4)) +
+#   theme(axis.text=element_text(size=12)) +
+#   theme(legend.title=element_text(size=10)) +
+#   theme(legend.text=element_text(size=10)) +
+#   theme(legend.title.align=1) +
+#   theme(legend.position="bottom") +
+#   theme(legend.key.size=unit(1, "cm")) +
+#   theme(legend.key.width=unit(1, "cm")) +
+#   scale_x_discrete(name="Scale type", 
+#                    labels=c("Age","Domain","Economic","Ethnicity","Gender","Occupation", "Social","Spatial","Temporal")) +
+#   ylab("Intervention") +
+#   theme(axis.text.x = element_text(angle=45,hjust=1,size=12)))
+
+
+
 
 
 ##BY STE TYPE AND OUTCOME DOMAIN - HEATMAP
